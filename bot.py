@@ -85,14 +85,24 @@ async def bot_behavior(message):
     return False
 
 async def bot_answer(message):
-    # Mark the message as read (we know we're working on it)
+    # Mark the message as read so the user knows we're working on it
     await message.add_reaction('✨')
+
+    # Send the typing status to the channel so the user knows we're working on it
+    await message.channel.typing()
     
-    user = message.author.display_name
-    user= user.replace(" ", "")
+    user = message.author
+    userName = message.author.display_name
+    userName = userName.replace(" ", "")
     
     # Clean the user's message to make it easy to read
-    user_input = functions.clean_user_message(message.clean_content)
+    user_input = functions.clean_user_message(message.clean_content, client)
+
+    # Print user's message to log so you know what it's replying to
+    if isinstance(message.channel, discord.TextChannel):
+        print(f"{message.channel.name} | {userName}: {user_input}")
+    else:
+        print(f"DM | {userName}: {user_input}")
     
     #Is this an image request?
     image_request = functions.check_for_image_request(user_input)
@@ -104,14 +114,15 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        history = await functions.get_conversation_history(user, 15)
-        prompt = await functions.create_text_prompt(user_input, user, character, character_card['name'], history, reply, text_api)
+        history = await functions.get_conversation_history(userName, 15)
+        prompt = await functions.create_text_prompt(user_input, userName, character, character_card['name'], history, reply, text_api)
         
     
     queue_item = {
         'prompt': prompt,
         'message': message,
         'user_input': user_input,
+        'userName': userName,
         'user': user,
         'image': image_request
     }
@@ -157,7 +168,7 @@ async def handle_llm_response(content, response):
     except KeyError:
         data = llm_response['choices'][0]['text']
     
-    llm_message = await functions.clean_llm_reply(data, content["user"], character_card["name"])
+    llm_message = await functions.clean_llm_reply(data, content["userName"], character_card["name"])
     
     queue_item = {"response": llm_message,"content": content}
 
@@ -175,10 +186,10 @@ async def send_to_model_queue():
         content = await queue_to_process_message.get()
         
         # Add the message to the user's history
-        await functions.add_to_conversation_history(content["user_input"], content["user"], content["user"])
+        await functions.add_to_conversation_history(content["user_input"], content["userName"], content["userName"])
         
         # Grab the data JSON we want to send it to the LLM
-        await functions.write_to_log("Sending prompt from " + content["user"] + " to LLM model.")
+        await functions.write_to_log("Sending prompt from " + content["userName"] + " to LLM model.")
 
         async with ClientSession() as session:
             async with session.post(text_api["address"] + text_api["generation"], headers=text_api["headers"], data=content["prompt"]) as response:
@@ -200,7 +211,7 @@ async def send_to_stable_diffusion_queue():
         data["prompt"] += image_prompt["response"]
         data_json = json.dumps(data)
 
-        await functions.write_to_log("Sending prompt from " + image_prompt["content"]["user"] + " to Stable Diffusion model.")
+        await functions.write_to_log("Sending prompt from " + image_prompt["content"]["userName"] + " to Stable Diffusion model.")
         
         async with ClientSession() as session:
             async with session.post(image_api["link"], headers=image_api["headers"], data=data_json) as response:
@@ -225,7 +236,7 @@ async def send_to_user_queue():
         reply = await queue_to_send_message.get()
         
         # Add the message to user's history
-        await functions.add_to_conversation_history(reply["response"], character_card["name"], reply["content"]["user"])
+        await functions.add_to_conversation_history(reply["response"], character_card["name"], reply["content"]["userName"])
         
         # Update reactions
         await reply["content"]["message"].remove_reaction('✨', client.user)
@@ -245,7 +256,7 @@ async def send_to_user_queue():
 @client.event
 async def on_ready():
     # Let owner known in the console that the bot is now running!
-    print(f'Discord Bot is up and running.')
+    print(f'Discord Bot is up and running on the bot: ' + client.user.name + '#' + client.user.discriminator)
     
     global text_api
     global image_api
@@ -318,10 +329,10 @@ history = app_commands.Group(name="conversation-history", description="View or c
 
 @history.command(name="reset", description="Reset your conversation history with the bot.")
 async def reset_history(interaction):
-    user = str(interaction.user.display_name)
-    user= user.replace(" ", "")
+    userName = str(interaction.user.display_name)
+    userName = userName.replace(" ", "")
 
-    file_name = functions.get_file_name("context", user + ".txt")
+    file_name = functions.get_file_name("context", userName + ".txt")
 
     # Attempt to remove the file and let the user know what happened.
     try:
@@ -337,12 +348,12 @@ async def reset_history(interaction):
 
 @history.command(name="view", description=" View the last 20 lines of your conversation history.")
 async def view_history(interaction):
+
     # Get the user who started the interaction and find their file.
+    userName = str(interaction.user.display_name)
+    userName = userName.replace(" ", "")
 
-    user = str(interaction.user.display_name)
-    user= user.replace(" ", "")
-
-    file_name = functions.get_file_name("context", user + ".txt")
+    file_name = functions.get_file_name("context", userName + ".txt")
     
     try:
         with open(file_name, "r", encoding="utf-8") as file:  # Open the file in read mode

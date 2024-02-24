@@ -91,10 +91,10 @@ def check_for_image_request(user_message):
     result = bool(pattern.search(user_message))
     return result
 
-async def create_text_prompt(user_input, user, character, bot, history, reply, text_api):
+async def create_text_prompt(user_input, userName, character, bot, history, reply, text_api):
 
-    prompt = character + history + reply + user + ": " + user_input + "\n" + bot + ": "
-    stop_sequence = ["\n" + user + ":", user + ":", bot + ":", "You:"]
+    prompt = character + history + reply + userName + ": " + user_input + "\n" + bot + ": "
+    stop_sequence = ["\n" + userName + ":", userName + ":", bot + ":", "You:"]
     
     data = text_api["parameters"]
     data.update({"prompt": prompt})
@@ -131,9 +131,9 @@ async def create_image_prompt(user_input, character, text_api):
     return data_string
 
 # Get user's conversation history
-async def get_conversation_history(user, lines):
+async def get_conversation_history(userName, lines):
 
-    file = get_file_name("context", user+".txt")
+    file = get_file_name("context", userName + ".txt")
     
     # Get as many lines from the file as needed
     contents, length = await get_txt_file(file, lines)
@@ -146,11 +146,11 @@ async def get_conversation_history(user, lines):
         
     return contents
 
-async def add_to_conversation_history(message, user, file):
+async def add_to_conversation_history(message, userName, file):
 
     file_name = get_file_name("context", file + ".txt")
     
-    content = user + ": " + message + "\n"
+    content = userName + ": " + message + "\n"
     
     await append_text_file(file_name, content)
 
@@ -202,20 +202,21 @@ async def append_text_file(file, text):
         context.close()
         
 # Clean the input provided by the user to the bot!
-def clean_user_message(user_input):
+def clean_user_message(user_input, client):
 
     # Remove the bot's tag from the input since it's not needed.
-    user_input = user_input.replace("@Kobold","")
+    user_input = user_input.replace(str(client.user.name),"")
+    user_input = user_input.replace(str(client.user.name + '#' + client.user.discriminator),"")
     
     # Remove any spaces before and after the text.
     user_input = user_input.strip()
     
     return user_input
 
-async def clean_llm_reply(message, user, bot):
+async def clean_llm_reply(message, userName, bot):
 
     # Clean the text and prepare it for posting
-    clean_message = message.replace(bot + ":","").replace(user + ":","").replace("You:"," ")
+    clean_message = message.replace(bot + ":","").replace(userName + ":","").replace("You:"," ")
     clean_message = clean_message.strip()
     
     # parts = clean_message.split("#", 1)
