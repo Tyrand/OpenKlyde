@@ -1,5 +1,7 @@
 # OpenKlyde - A Self Hosted AI Discord Bot
 
+Current TODO: Make sure it's up-to-date with KoboldCPP's API and Discord.py
+
 OpenKyde is an AI Discord Bot!
 
 It incorporates an AI Large Language Model (LLM) into a discord bot by making API calls to a Koboldcpp instance. It can also work with Oobabooga.
@@ -33,9 +35,3 @@ To run this bot:
 
 Cheers!
 
-## ToDo:
-
-- [ ] Make a better README.
-- [ ] Make switching between Koboldcpp or Oobabooga Textgen-ui more mainstream.
-- [ ] Enable support for Character.ai, TavernAI, SillyTavern, etc. character formats.
-- [ ] Add more standard Discord Bot features. (music, games, moderation, etc.)
