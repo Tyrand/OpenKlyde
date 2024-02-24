@@ -11,7 +11,7 @@
 	"instruction-response": "### Response",
     "parameters": {
 		"prompt": "",
-		"stopping_strings": [],
+		"stop_sequence": [],
 		"add_bos_token": "True",
 		"ban_eos_token": "True",
 		"do_sample": "False",
