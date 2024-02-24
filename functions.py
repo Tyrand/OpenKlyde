@@ -94,15 +94,15 @@ def check_for_image_request(user_message):
 async def create_text_prompt(user_input, user, character, bot, history, reply, text_api):
 
     prompt = character + history + reply + user + ": " + user_input + "\n" + bot + ": "
-    stopping_strings = ["\n" + user + ":", user + ":", bot + ":", "You:"]
+    stop_sequence = ["\n" + user + ":", user + ":", bot + ":", "You:"]
     
     data = text_api["parameters"]
     data.update({"prompt": prompt})
     
     if text_api["name"] == "openai":
-        data.update({"stop": stopping_strings})
+        data.update({"stop": stop_sequence})
     else:
-        data.update({"stopping_strings": stopping_strings})
+        data.update({"stop_sequence": stop_sequence})
 
     data_string = json.dumps(data)
     return data_string
@@ -117,15 +117,15 @@ async def create_image_prompt(user_input, character, text_api):
     else:
         prompt = "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n" + character + "Please describe yourself in vivid detail.\n\n### Response:\n"
         
-    stopping_strings = ["### Instruction:", "### Response:", "You:" ]
+    stop_sequence = ["### Instruction:", "### Response:", "You:" ]
     
     data = text_api["parameters"]
     data.update({"prompt": prompt})
     
     if text_api["name"] == "openai":
-        data.update({"stop": stopping_strings})
+        data.update({"stop": stop_sequence})
     else:
-        data.update({"stopping_strings": stopping_strings})
+        data.update({"stop_sequence": stop_sequence})
 
     data_string = json.dumps(data)
     return data_string
