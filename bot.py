@@ -92,7 +92,8 @@ async def bot_answer(message):
     await message.channel.typing()
     
     user = message.author
-    userName = message.author.display_name
+    userID = message.author.id
+    userName = message.author.name
     userName = userName.replace(" ", "")
     
     # Clean the user's message to make it easy to read
