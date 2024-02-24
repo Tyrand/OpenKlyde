@@ -203,28 +203,40 @@ async def append_text_file(file, text):
         
 # Clean the input provided by the user to the bot!
 def clean_user_message(user_input, client):
+    # Convert bot tags to lowercase for case-insensitive matching
+    bot_tags = [re.escape(str(client.user.name)).lower(), re.escape(str(client.user.name + '#' + client.user.discriminator)).lower()]
 
-    # Remove the bot's tag from the input since it's not needed.
-    user_input = user_input.replace(str(client.user.name),"")
-    user_input = user_input.replace(str(client.user.name + '#' + client.user.discriminator),"")
-    
+    # Convert user input to lowercase for case-insensitive matching
+    user_input_lower = user_input.lower()
+
+    # Create a regular expression pattern for case-insensitive replacement
+    pattern = re.compile("|".join(bot_tags), re.IGNORECASE)
+
+    # Replace bot tags with an empty string in a case-insensitive manner
+    cleaned_input = pattern.sub("", user_input)
+
     # Remove any spaces before and after the text.
-    user_input = user_input.strip()
-    
-    return user_input
+    cleaned_input = cleaned_input.strip()
+
+    return cleaned_input
 
 async def clean_llm_reply(message, userName, bot):
+    # Convert bot and user names to lowercase for case-insensitive matching
+    bot_lower = bot.lower()
+    userName_lower = userName.lower()
 
-    # Clean the text and prepare it for posting
-    clean_message = message.replace(bot + ":","").replace(userName + ":","").replace("You:"," ")
-    clean_message = clean_message.strip()
-    
-    # parts = clean_message.split("#", 1)
+    # Create a regular expression pattern for case-insensitive replacement
+    pattern = re.compile(re.escape(bot_lower) + r":|" + re.escape(userName_lower) + r":|You:", re.IGNORECASE)
+
+    # Replace bot and user names, as well as #bots, with an empty string in a case-insensitive manner
+    cleaned_message = pattern.sub("", message)
+
+    # Remove any spaces before and after the text.
+    cleaned_message = cleaned_message.strip()
 
     # Return nice and clean message
-    # return parts[0]
-    return clean_message;
-    
+    return cleaned_message
+
 # Get the current bot character in a prompt-friendly format
 def get_character(character_card):
 
