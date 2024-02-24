@@ -115,7 +115,7 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        history = await functions.get_conversation_history(userName, 15)
+        history = await functions.get_conversation_history(userName, 20)
         prompt = await functions.create_text_prompt(user_input, userName, character, character_card['name'], history, reply, text_api)
         
     
@@ -146,15 +146,15 @@ async def get_reply(message):
 
             # If the author of the reply is not the same person as the initial user, we need this data
             if referenced_user_message.author != message.author:
-                reply = referenced_user_message.author.display_name + ": " + referenced_user_message.clean_content + "\n"
-                reply = reply + referenced_message.author.display_name + ": " + referenced_message.clean_content + "\n"
+                reply = referenced_user_message.author.name + ": " + referenced_user_message.clean_content + "\n"
+                reply = reply + referenced_message.author.name + ": " + referenced_message.clean_content + "\n"
                 reply = functions.clean_user_message(reply)
 
                 return reply
         
         #If the referenced message isn't from the bot, use it in the reply
         if referenced_message.author != client.user: 
-            reply = referenced_message.author.display_name + ": " + referenced_message.clean_content + "\n"
+            reply = referenced_message.author.name + ": " + referenced_message.clean_content + "\n"
 
             return reply
 
@@ -330,7 +330,7 @@ history = app_commands.Group(name="conversation-history", description="View or c
 
 @history.command(name="reset", description="Reset your conversation history with the bot.")
 async def reset_history(interaction):
-    userName = str(interaction.user.display_name)
+    userName = str(interaction.user.name)
     userName = userName.replace(" ", "")
 
     file_name = functions.get_file_name("context", userName + ".txt")
@@ -351,7 +351,7 @@ async def reset_history(interaction):
 async def view_history(interaction):
 
     # Get the user who started the interaction and find their file.
-    userName = str(interaction.user.display_name)
+    userName = str(interaction.user.name)
     userName = userName.replace(" ", "")
 
     file_name = functions.get_file_name("context", userName + ".txt")
