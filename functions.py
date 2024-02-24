@@ -215,14 +215,14 @@ def clean_user_message(user_input):
 async def clean_llm_reply(message, user, bot):
 
     # Clean the text and prepare it for posting
-    dirty_message = message.replace(bot + ":","")
-    clean_message = dirty_message.replace(user + ":","")
+    clean_message = message.replace(bot + ":","").replace(user + ":","").replace("You:"," ")
     clean_message = clean_message.strip()
     
-    parts = clean_message.split("#", 1)
+    # parts = clean_message.split("#", 1)
 
     # Return nice and clean message
-    return parts[0]
+    # return parts[0]
+    return clean_message;
     
 # Get the current bot character in a prompt-friendly format
 def get_character(character_card):
