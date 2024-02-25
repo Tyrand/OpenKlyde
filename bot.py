@@ -40,8 +40,8 @@ last_message_sent = datetime.datetime.now()
 
 async def bot_behavior(message):
 
-    # If the bot wrote the message, don't do anything more!
-    if message.author == client.user:
+    # If the bot, or another bot, wrote the message, don't do anything more!
+    if message.author == client.user or message.author.bot:
         return False
     
     # If the bot is mentioned in a message, reply to the message
