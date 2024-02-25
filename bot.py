@@ -219,7 +219,15 @@ async def send_to_stable_diffusion_queue():
 # All messages are checked to not be over Discord's 2000 characters limit - They are split at the last new line and sent concurrently if they are
 async def send_large_message(original_message, reply_content, file=None):
     max_chars = 2000
-    chunks = [reply_content[i:i + max_chars] for i in range(0, len(reply_content), max_chars)]
+    chunks = []
+    while len(reply_content) > max_chars:
+        last_newline_index = reply_content.rfind('\n', 0, max_chars)
+        if last_newline_index == -1:
+            last_newline_index = max_chars
+        chunk = reply_content[:last_newline_index]
+        chunks.append(chunk)
+        reply_content = reply_content[last_newline_index:].lstrip()
+    chunks.append(reply_content)
     for chunk in chunks:
         if file:
             await original_message.reply(chunk, file=file)
