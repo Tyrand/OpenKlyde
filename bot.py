@@ -115,7 +115,7 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        history = await functions.get_conversation_history(userName, 20)
+        history = await functions.get_conversation_history(user, 6000)
         prompt = await functions.create_text_prompt(user_input, userName, character, character_card['name'], history, reply, text_api)
         
     

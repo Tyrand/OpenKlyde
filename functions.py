@@ -131,20 +131,32 @@ async def create_image_prompt(user_input, character, text_api):
     return data_string
 
 # Get user's conversation history
-async def get_conversation_history(userName, lines):
+async def get_conversation_history(user, characters):
 
-    file = get_file_name("context", userName + ".txt")
-    
-    # Get as many lines from the file as needed
-    contents, length = await get_txt_file(file, lines)
-    
-    if contents is None:
-        contents = ""
-        
-    if length > 50:
-        await prune_text_file(file, 30)
-        
-    return contents
+    file_path = get_file_name("context", str(user.name) + ".txt")
+
+    try:
+        # Read the file and put its contents into a variable
+        with open(file_path, "r", encoding="utf-8") as file:
+            contents = file.readlines()
+            length = len(contents)
+            contents = contents[-characters:]
+
+            # Turn contents into a string for easier consumption
+            history_string = ''.join(contents)
+
+            # Log that the file has been accessed
+            print("Accessed:", file_path)
+
+            return history_string
+
+    except FileNotFoundError:
+        await write_to_log(f"File {file_path} not found. Where did you lose it?")
+        return None, 0
+
+    except Exception as e:
+        await write_to_log(f"An unexpected error occurred while accessing {file_path}: {e}")
+        return None, 0
 
 async def add_to_conversation_history(message, userName, file):
 
@@ -156,30 +168,37 @@ async def add_to_conversation_history(message, userName, file):
 
 # Read in however many lines of a text file (for context or other text)
 # Returns a string with the contents of the file
-async def get_txt_file(filename, lines):
+async def get_txt_file(filename, characters):
 
     # Attempt to read the file and put its contents into a variable
     try:
         with open(filename, "r", encoding="utf-8") as file:  # Open the file in read mode
-            contents = file.readlines()
+            contents = file.read()
             length = len(contents)     
-            contents = contents[-lines:]
-
-            # Turn contents into a string for easier consumption
-            # I may not want to do this step. We'll see
-            history_string = ''.join(contents)
             
-            return history_string, length
+            # Fetch the last 6000 characters
+            contents = contents[-characters:]
+
+            # Find the last newline character to ensure returning full lines
+            last_newline_index = contents.rfind('\n')
+            if last_newline_index != -1:
+                contents = contents[last_newline_index + 1:]
+
+            # Log that the file has been accessed
+            print("Accessed: ", filename)
+
+            return contents, length
             
     # Let someone know if the file isn't where we expected to find it.
     except FileNotFoundError:
         await write_to_log("File " + filename + " not found. Where did you lose it?")
         return None, 0
     
-    # Panic if we have no idea what's going in here
+    # Panic if we have no idea what's going on here
     except Exception as e:
-        await write_to_log("An unexpected error occurred: " + e)
+        await write_to_log("An unexpected error occurred: " + str(e))
         return None, 0
+
 
 async def prune_text_file(file, trim_to):
 
