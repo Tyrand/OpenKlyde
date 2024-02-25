@@ -79,22 +79,6 @@ async def create_image_prompt(user_input, character, text_api):
     data.update({"stop": stop_sequence} if text_api["name"] == "openai" else {"stop_sequence": stop_sequence})
     return json.dumps(data)
 
-async def get_conversation_memory(user, characters):
-    # Get user's conversation memory
-    file_path = get_file_name("memory", f"{user.name}.txt")
-    try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            contents = file.readlines()[-characters:]
-            memory_string = ''.join(contents)
-            print("Accessed:", file_path)
-            return memory_string
-    except FileNotFoundError:
-        await write_to_log(f"File {file_path} not found. Where did you lose it?")
-        return ""
-    except Exception as e:
-        await write_to_log(f"An unexpected error occurred while accessing {file_path}: {e}")
-        return ""
-
 async def get_conversation_history(user, characters):
     # Get user's conversation history
     file_path = get_file_name("context", f"{user.name}.txt")
@@ -103,6 +87,9 @@ async def get_conversation_history(user, characters):
             contents = file.readlines()[-characters:]
             history_string = ''.join(contents)
             print("Accessed:", file_path)
+            print("Total characters:", len(history_string), "Total new lines:", history_string.count('\n'))
+            trimmed_contents = history_string.strip()
+            print("Trimmed characters:", len(trimmed_contents), "Trimmed new lines:", trimmed_contents.count('\n'))
             return history_string
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
