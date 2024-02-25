@@ -84,13 +84,14 @@ async def get_conversation_history(user, characters):
     file_path = get_file_name("context", f"{user.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
-            contents = file.readlines()[-characters:]
-            history_string = ''.join(contents)
+            contents = file.read()
+            if len(contents) > characters:
+                contents = contents[-characters:]
             print("Accessed:", file_path)
-            print("Total characters:", len(history_string), "Total new lines:", history_string.count('\n'))
-            trimmed_contents = history_string.strip()
+            print("Total characters:", len(contents), "Total new lines:", contents.count('\n'))
+            trimmed_contents = contents.strip()
             print("Trimmed characters:", len(trimmed_contents), "Trimmed new lines:", trimmed_contents.count('\n'))
-            return history_string
+            return trimmed_contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
         return None, 0
