@@ -272,9 +272,6 @@ async def on_ready():
 @client.event
 async def on_message(message):
     
-    # Update hardware status
-    await update_status()
-    
     # Bot will now either do or not do something!
     await bot_behavior(message)
         
