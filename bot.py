@@ -217,22 +217,22 @@ async def send_to_stable_diffusion_queue():
                 queue_to_process_image.task_done()
 
 # All messages are checked to not be over Discord's 2000 characters limit - They are split at the last new line and sent concurrently if they are
-async def send_large_message(channel, reply_content, file=None):
+async def send_large_message(original_message, reply_content, file=None):
     max_chars = 2000
     chunks = [reply_content[i:i + max_chars] for i in range(0, len(reply_content), max_chars)]
     for chunk in chunks:
         if file:
-            await channel.send(chunk, file=file)
+            await original_message.reply(chunk, file=file)
         else:
-            await channel.send(chunk)
+            await original_message.reply(chunk)
 
-# Reply queue that's used to allow the bot to reply even while other stuff if is processing
+# Reply queue that's used to allow the bot to reply even while other stuff is processing
 async def send_to_user_queue():
     while True:
         reply = await queue_to_send_message.get()
 
         # Update reactions
-        await reply["content"]["message"].remove_reaction('⏲')
+        await reply["content"]["message"].remove_reaction('⏲', client.user)
 
         # Check if the response is empty
         if not reply["response"]:
@@ -246,10 +246,10 @@ async def send_to_user_queue():
 
         if reply["content"]["image"]:
             image_file = discord.File(reply["image"])
-            await send_large_message(reply["content"]["message"].channel, reply["response"], image_file)
+            await send_large_message(reply["content"]["message"], reply["response"], image_file)
             os.remove(reply["image"])
         else:
-            await send_large_message(reply["content"]["message"].channel, reply["response"])
+            await send_large_message(reply["content"]["message"], reply["response"])
 
         queue_to_send_message.task_done()
 
