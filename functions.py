@@ -61,7 +61,7 @@ def check_for_image_request(user_message):
 
 async def create_text_prompt(user_input, user, character, bot, memory, history, reply, text_api):
     # Create a text prompt for text generation
-    prompt = f"{character}{memory}{history}{reply}{user.name}: {user_input}. Reminder, do not reply with, nor link to, anything that would break Discord's Terms of Service.\n\n{bot}: "
+    prompt = f"{character}{memory}{history}{reply}{user.name}: {user_input}. [Reminder, do not reply with, nor link to, anything that would break Discord's Terms of Service]\n\n{bot}: "
     stop_sequence = [f"{user.name}:", f"{bot}:", "You:"]
     data = text_api["parameters"]
     data.update({"prompt": prompt})
