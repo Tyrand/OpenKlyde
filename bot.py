@@ -215,31 +215,44 @@ async def send_to_stable_diffusion_queue():
                 }
                 queue_to_send_message.put_nowait(queue_item)
                 queue_to_process_image.task_done()
-
-# Reply queue that's used to allow the bot to reply even while other stuff if is processing 
+used to allow the bot to reply even while other stuff if is processing 
 async def send_to_user_queue():
     while True:
-    
         # Grab the reply that will be sent
         reply = await queue_to_send_message.get()
         
-        # Add the message to user's history
-        await functions.add_to_conversation_history(reply["response"], character_card["name"], reply["content"]["userName"])
-        
         # Update reactions
-        await reply["content"]["message"].remove_reaction('✨', client.user)
-        await reply["content"]["message"].add_reaction('✅')
+        await reply["content"]["message"].remove_reaction('⏲', client.user)
         
+        # Check if the response is empty
+        if not reply["response"]:
+            error_message = "An error occurred. Please try again."
+            await reply["content"]["message"].channel.send(error_message, reference=reply["content"]["message"])
+            queue_to_send_message.task_done()
+            continue  # Skip the rest of the loop
+        
+        # Add the message to user's history
+        await functions.add_to_conversation_history(reply["response"], character_card["name"], reply["content"]["userName"], reply["content"]["user"])
         
         if reply["content"]["image"]:
             image_file = discord.File(reply["image"])
-            await reply["content"]["message"].channel.send(reply["response"], file=image_file, reference=reply["content"]["message"])
+            await send_large_message(reply["content"]["message"].channel, reply["response"], image_file)
             os.remove(reply["image"])
-        
         else:
-            await reply["content"]["message"].channel.send(reply["response"], reference=reply["content"]["message"])
+            await send_large_message(reply["content"]["message"].channel, reply["response"])
 
         queue_to_send_message.task_done()
+
+# All messages are checked to not be over Discord's 2000 characters limit - They are split at the last new line and sent concurrently if they are
+async def send_large_message(channel, message, file=None):
+    max_chars = 2000
+    chunks = [message[i:i + max_chars] for i in range(0, len(message), max_chars)]
+
+    for chunk in chunks:
+        if file:
+            await channel.send(chunk, file=file)
+        else:
+            await channel.send(chunk)
 
 @client.event
 async def on_ready():
@@ -416,7 +429,7 @@ async def change_parameters(interaction):
     # Create the selector list with all the available options.
     for preset in presets:
         if preset.startswith("text"):
-            options.append(discord.SelectOption(label=card, value=card))
+            options.append(discord.SelectOption(label=character_card, value=character_card))
 
     select = discord.ui.Select(placeholder="Select a character card.", options=options)
     select.callback = parameter_select_callback
