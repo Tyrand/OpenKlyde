@@ -56,7 +56,7 @@ async def write_to_log(information):
 def check_for_image_request(user_message):
     # Check if user is looking for an image to be generated
     user_message = user_message.lower()
-    pattern = re.compile('(send|create|give|generate|draw|snap|show|take|message).*?(image|picture|photo|photogragh|pic|drawing|painting|screenshot)')
+    pattern = re.compile('^(send|create|give|generate|draw|snap|show|take|message).*?(image|picture|photo|photogragh|pic|drawing|painting|screenshot)')
     return bool(pattern.search(user_message))
 
 async def create_text_prompt(user_input, user, character, bot, memory, history, reply, text_api):
