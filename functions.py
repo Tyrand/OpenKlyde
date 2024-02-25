@@ -8,12 +8,6 @@ from PIL import Image
 from io import BytesIO  # Import BytesIO directly from the standard library
 import datetime
 
-async def check_bot_temps():
-    # Function to check bot's temperature (card temps)
-    process = await asyncio.create_subprocess_exec("powershell.exe", "S:\AI\extra_scripts\strippedinfo.ps1", stdout=asyncio.subprocess.PIPE)
-    output, _ = await process.communicate()
-    return output.decode()
-
 async def set_api(config_file):
     # Set API struct from JSON file
     file = get_file_name("configurations", config_file)

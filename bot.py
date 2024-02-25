@@ -38,19 +38,6 @@ image_api = {}
 status_last_update = None
 last_message_sent = datetime.datetime.now()
 
-async def update_status():
-
-    global status_last_update
-    now = datetime.datetime.now()
-    
-    # If status has never been updated, or it's been more than 30 seconds, update status
-    if status_last_update == None or now - status_last_update > datetime.timedelta(seconds=30):
-        
-        data = await functions.check_bot_temps()
-        activity = discord.Activity(type=discord.ActivityType.watching, name=data)
-        await client.change_presence(activity=activity)
-        status_last_update = datetime.datetime.now()
-
 async def bot_behavior(message):
 
     # If the bot wrote the message, don't do anything more!
@@ -282,9 +269,6 @@ async def on_ready():
     client.tree.add_command(parameters)
     await client.tree.sync()
         
-    # Check bot temps and update bot status accordingly
-    await update_status()
-
 @client.event
 async def on_message(message):
     
