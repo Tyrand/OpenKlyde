@@ -21,12 +21,16 @@ import json
 discord_api_key = "INSERT_YOUR_DISCORD_BOT_API_KEY_HERE"
 ReactionEmoji = "⏲"
 PromptDebug = False; # Set to True to print prompt debug information to the console
-userMemoryAmount = 1000
-guildMemoryAmount = 1000
+UserMemoryAmount = 1000
+GuildMemoryAmount = 1000
 UserContextAmount = 4000
-singleChannelMode = False # set to True to only track and reply messages from a single channel
-singleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
-logAllMessages = False # set to True to log all messages to a file
+ChannelContextAmount = 4000 # To be implemented
+directMessages = False # set to True to allow the bot to respond to direct messages
+SingleChannelMode = False # set to True to only track and reply messages from a single channel
+SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
+SingleChannelModeName = "" # set to the desired channel name if singleChannelMode is True
+LogAllMessages = False # set to True to log all messages to a file
+IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
 
 intents = discord.Intents.all()
 intents.message_content = True
@@ -44,39 +48,47 @@ status_last_update = None
 
 
 async def bot_behavior(message):
-    # If the bot, or another bot, wrote the message, don't do anything more!
+    # If the bot, or another bot, wrote the message, don't respond.
     if (
         message.author == client.user
         or message.author.bot
     ):
         # if message.author == client.user or message.author.bot:
         return False
-    if (
-        message.content.startswith(
-            (".", ",", "!", "/", "<", ">", "(", ")", "[", "]", ":", "http")
-        )
-        or message.content is None
-    ):
-        return False
-    if singleChannelMode:
-        # If the message is in Single , reply to the message
-        if message.channel.id == singleChannelModeID:
+    
+    # If the message is empty, or starts with a symbol, don't respond.
+    if IgnoreSymbols:
+        if (
+            message.content.startswith(
+                (".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")
+            )
+            or message.content is None
+        ):
+            return False
+        
+    if SingleChannelMode:
+        # If the message is in singleChannelModeID , reply to the message
+        if message.channel.id == SingleChannelModeName:
             await bot_answer(message)
             return True
-    if logAllMessages:
+        
+    if LogAllMessages:
         # log all messages into seperate channel files
         if message.guild:
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
+
     # If the bot is mentioned in a message, reply to the message
     if client.user.mentioned_in(message):
         await bot_answer(message)
         return True
-    #If someone DMs the bot, reply to them in the same DM
-    if message.guild is None and not message.author.bot:
-        await bot_answer(message)
-        return True
+    
+    if directMessages:
+        #If someone DMs the bot, reply to them in the same DM
+        if message.guild is None and not message.author.bot:
+            await bot_answer(message)
+            return True
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
     # If someone speaks in a channel, there will be a three percent chance of answering (only in chatbots and furbies)
     # If I'm bored, ping someone with a message history
@@ -115,11 +127,11 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        userMemory = str(await functions.get_user_memory(user, userMemoryAmount))
+        userMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
         if userMemory == "(None, 0)":
             userMemory = ""
         if message.guild:
-            guildMemory = str(await functions.get_guild_memory(user, guildMemoryAmount))
+            guildMemory = str(await functions.get_guild_memory(user, GuildMemoryAmount))
         if guildMemory == "(None, 0)":
             guildMemory = ""
         userMemory = guildMemory + userMemory
