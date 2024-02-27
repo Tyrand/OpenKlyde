@@ -19,6 +19,15 @@ import json
 # API Keys and Information
 # Your API keys and tokens go here. Do not commit with these in place!
 discord_api_key = "INSERT_YOUR_DISCORD_BOT_API_KEY_HERE"
+ReactionEmoji = "⏲"
+PromptDebug = False; # Set to True to print prompt debug information to the console
+userMemoryAmount = 1000
+guildMemoryAmount = 1000
+UserContextAmount = 4000
+singleChannelMode = False # set to True to only track and reply messages from a single channel
+singleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
+logAllMessages = False # set to True to log all messages to a file
+
 intents = discord.Intents.all()
 intents.message_content = True
 client = commands.Bot(command_prefix="$", intents=intents)
@@ -49,11 +58,17 @@ async def bot_behavior(message):
         or message.content is None
     ):
         return False
-    # log all messages into seperate channel files
-    if message.guild:
-        await functions.add_to_channel_history(
-            message.guild, message.channel, message.author, message.content
-        )
+    if singleChannelMode:
+        # If the message is in Single , reply to the message
+        if message.channel.id == singleChannelModeID:
+            await bot_answer(message)
+            return True
+    if logAllMessages:
+        # log all messages into seperate channel files
+        if message.guild:
+            await functions.add_to_channel_history(
+                message.guild, message.channel, message.author, message.content
+            )
     # If the bot is mentioned in a message, reply to the message
     if client.user.mentioned_in(message):
         await bot_answer(message)
@@ -78,7 +93,7 @@ async def bot_behavior(message):
 
 async def bot_answer(message):
     # React to the message so the user knows we're working on it
-    await message.add_reaction("⏲")
+    await message.add_reaction(ReactionEmoji)
     # Send the typing status to the channel so the user knows we're working on it
     await message.channel.typing()
     user = message.author
@@ -100,15 +115,15 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        userMemory = str(await functions.get_user_memory(user, 1000))
+        userMemory = str(await functions.get_user_memory(user, userMemoryAmount))
         if userMemory == "(None, 0)":
             userMemory = ""
         if message.guild:
-            guildMemory = str(await functions.get_guild_memory(user, 1000))
+            guildMemory = str(await functions.get_guild_memory(user, guildMemoryAmount))
         if guildMemory == "(None, 0)":
             guildMemory = ""
         userMemory = guildMemory + userMemory
-        user_history = str(await functions.get_user_history(user, 4000))
+        user_history = str(await functions.get_user_history(user, UserContextAmount))
         if user_history == "(None, 0)":
             user_history = ""
         prompt = await functions.create_text_prompt(
@@ -121,15 +136,15 @@ async def bot_answer(message):
             reply,
             text_api,
         )
-        # Uncomment to debug the prompt
-        # print("User Input:", user_input)
-        # print("User:", user)
-        # print("Character:", character)
-        # print("Character Card Name:", character_card['name'])
-        # print("User Memory:", userMemory[:50])
-        # print("User History:", user_history[:50])
-        # print("Reply:", reply)
-        # print("Text API:", text_api)
+        if PromptDebug:
+            print("User Input:", user_input)
+            print("User:", user)
+            print("Character:", character)
+            print("Character Card Name:", character_card['name'])
+            print("User Memory:", userMemory[:50])
+            print("User History:", user_history[:50])
+            print("Reply:", reply)
+            print("Text API:", text_api)
     queue_item = {
         "prompt": prompt,
         "message": message,
@@ -320,7 +335,7 @@ async def send_to_user_queue():
         else:
             await send_large_message(reply["content"]["message"], reply["response"])
         # Update reactions after message has been sent
-        await reply["content"]["message"].remove_reaction("⏲", client.user)
+        await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
