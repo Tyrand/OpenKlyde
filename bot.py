@@ -277,19 +277,22 @@ async def send_to_model_queue():
                     await functions.write_to_log(
                         f"Received API response from LLM model: {response_data}"
                     )
-                    # if the response is not empty, and does not start with a newline or "\n\n", send it to be cleaned then sent to the user
-                    if (response_data["results"][0]["text"].strip()
-                    #    and not response_data["results"][0]["text"].startswith("\n\\n")
-                    #    and not response_data["results"][0]["text"].startswith("\n\n")
+                    # If the response is not empty and doesn't start with the bot's name, send it to the next step
+                    if (
+                        # Prevent the bot from trying to sending empty messages
+                        response_data["results"][0]["text"].strip() 
+                        # Common error where the bot says it's name twice
+                        and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")  
+                        and not response_data["results"][0]["text"].startswith(f"\n\n{character_card['name']}:")
                     ):
-                        # Send the response to get cleaned of any stop sequences
+                        # Send the response to the next step
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
                         break
-                    # If the response is empty, or starts with a newline, send the prompt again
+                    # If the response is empty or starts with the bot's name, try again
                     await asyncio.sleep(
                         1
-                    )  # Add a delay to avoid excessive API requests
+                    )  # Add a delay to avoid excessive API requests (in seconds)
 
 async def send_to_stable_diffusion_queue():
     global image_api
