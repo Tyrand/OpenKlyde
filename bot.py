@@ -281,7 +281,8 @@ async def send_to_model_queue():
                     if (
                         # Prevent the bot from trying to sending empty messages
                         response_data["results"][0]["text"].strip() 
-                        # Common error where the bot says it's name twice
+                        # Common error where the bot immediately says it's own name
+                        # We don't want to send this to the next step because it'd get cleaned and become an empty message
                         and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")  
                         and not response_data["results"][0]["text"].startswith(f"\n\n{character_card['name']}:")
                     ):
@@ -289,7 +290,7 @@ async def send_to_model_queue():
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
                         break
-                    # If the response is empty or starts with the bot's name, try again
+                    # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
                     await asyncio.sleep(
                         1
                     )  # Add a delay to avoid excessive API requests (in seconds)
