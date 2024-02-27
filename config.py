@@ -1,11 +1,24 @@
 # API Keys and Configuration
 # Your API keys and tokens go here. Do not commit with these in place!
 discord_api_key = "INSERT_YOUR_DISCORD_BOT_API_KEY_HERE"
-ReactionEmoji = "⏲"
+ReactionEmoji = "⏲" # This is the emoji that the bot will react with when it is generating a response, it is removed when the response is sent
 PromptDebug = False; # Set to True to print prompt debug information to the console
-UserMemoryAmount = 1000
-GuildMemoryAmount = 1000
-UserContextAmount = 4000
+
+# Memory Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
+UserHistoryAmount = 6000
+
+UseChannelHistory = False; # Set to True to enable channel history (Multi-user mode)
+ChannelHistoryAmount = 6000
+
+UserMemoryAmount = 3000
+UseUserMemory = True; # Set to False to disable user memory
+
+GuildMemoryAmount = 3000
+UseGuildMemory = True; # Set to False to disable guild memory
+
+ChannelMemoryAmount = 3000
+UseChannelMemory = True; # Set to False to disable channel memory
+
 AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 LogAllMessages = False # set to True to log all messages to a file

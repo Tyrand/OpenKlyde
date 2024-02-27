@@ -124,24 +124,35 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        userMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
-        if userMemory is None or userMemory == "(None, 0)":
-            userMemory = ""
-        if message.guild:
-            guildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
-            if guildMemory is None or guildMemory == "(None, 0)":
-                guildMemory = ""
-            userMemory = guildMemory + userMemory
-        user_history = str(await functions.get_user_history(user, UserContextAmount))
-        if user_history is None or user_history == "(None, 0)":
-            user_history = ""
+        if UseUserMemory:
+            Memory = str(await functions.get_user_memory(user, UserMemoryAmount))
+            if Memory is None or Memory == "(None, 0)":
+                Memory = ""
+        if UseGuildMemory and message.guild:
+            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
+            if GuildMemory is None or GuildMemory == "(None, 0)":
+                GuildMemory = ""
+            Memory = GuildMemory + Memory
+        if UseChannelMemory and message.channel:
+            ChannelMemory = str(await functions.get_channel_memory(message.channel, ChannelMemoryAmount))
+            if ChannelMemory is None or ChannelMemory == "(None, 0)":
+                ChannelMemory = ""
+            Memory = ChannelMemory + Memory
+        History = str(await functions.get_user_history(user, UserHistoryAmount))
+        if History is None or History == "(None, 0)":
+            History = ""
+        if UseChannelHistory and message.channel:
+            ChannelHistory = str(await functions.get_channel_memory(message.channel, ChannelHistoryAmount))
+            if ChannelHistory is None or ChannelHistory == "(None, 0)":
+                ChannelHistory = ""
+            History = ChannelHistory + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
             user,
             character,
             character_card["name"],
-            userMemory,
-            user_history,
+            Memory,
+            History,
             reply,
             text_api,
         )
@@ -324,7 +335,6 @@ async def send_large_message(original_message, reply_content, file=None):
             await original_message.reply(chunk, file=file)
         else:
             await original_message.reply(chunk)
-
 
 # Reply queue that's used to allow the bot to reply even while other stuff is processing
 async def send_to_user_queue():
