@@ -237,7 +237,7 @@ async def add_to_channel_history(guild, channel, user, content):
     # Add message to channel's conversation history
     file_name = get_file_name("context/guilds/" + guild.name, f"{channel.name}.txt")
     if not content:
-        content = "<image>"
+        content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     message = f"{timestamp} {user.name}: {content}\n"
     await append_text_file(file_name, message)

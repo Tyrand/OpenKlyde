@@ -11,6 +11,8 @@ ReplyToBots = False # set to True to allow the bot to respond to other bots
 LogAllMessages = False # set to True to log all messages to a file
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
 
+BlockedUsers = [] # add user IDs, or names, to this list to block them from using the bot
+
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
 SingleChannelModeName = "" # set to the desired channel name if singleChannelMode is True

@@ -39,6 +39,10 @@ async def bot_behavior(message):
                 message.guild, message.channel, message.author, message.content
             )
     
+    # If the message is from a blocked user, don't respond
+    if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
+        return False
+
     # Don't respond to yourself or other bots unless specified
     if (
         message.author == client.user
