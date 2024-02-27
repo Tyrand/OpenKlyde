@@ -16,7 +16,7 @@ from discord import Interaction
 import asyncio
 import json
 
-# API Keys and Information
+# API Keys and Configuration
 # Your API keys and tokens go here. Do not commit with these in place!
 discord_api_key = "INSERT_YOUR_DISCORD_BOT_API_KEY_HERE"
 ReactionEmoji = "⏲"
@@ -24,13 +24,17 @@ PromptDebug = False; # Set to True to print prompt debug information to the cons
 UserMemoryAmount = 1000
 GuildMemoryAmount = 1000
 UserContextAmount = 4000
-ChannelContextAmount = 4000 # To be implemented
-directMessages = False # set to True to allow the bot to respond to direct messages
+AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
 SingleChannelModeName = "" # set to the desired channel name if singleChannelMode is True
 LogAllMessages = False # set to True to log all messages to a file
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
+
+# Not yet implemented
+#ChannelContextAmount = 4000 # To be implemented
+#KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size // Not yet implemented
+#LogFileLimit = 100 # set to the maximum number of lines to keep in a log file // Not yet implemented
 
 intents = discord.Intents.all()
 intents.message_content = True
@@ -46,7 +50,6 @@ text_api = {}
 image_api = {}
 status_last_update = None
 
-
 async def bot_behavior(message):
     # If the bot, or another bot, wrote the message, don't respond.
     if (
@@ -56,7 +59,7 @@ async def bot_behavior(message):
         # if message.author == client.user or message.author.bot:
         return False
     
-    # If the message is empty, or starts with a symbol, don't respond.
+    # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
     if IgnoreSymbols:
         if (
             message.content.startswith(
@@ -84,7 +87,7 @@ async def bot_behavior(message):
         await bot_answer(message)
         return True
     
-    if directMessages:
+    if AllowDirectMessages:
         #If someone DMs the bot, reply to them in the same DM
         if message.guild is None and not message.author.bot:
             await bot_answer(message)
@@ -101,7 +104,6 @@ async def bot_behavior(message):
     # If someone asks for a meme, generate an image of a meme on the fly
     # If playing a game or telling a story, add an image to the story
     return False
-
 
 async def bot_answer(message):
     # React to the message so the user knows we're working on it
@@ -167,7 +169,6 @@ async def bot_answer(message):
     }
     queue_to_process_message.put_nowait(queue_item)
 
-
 # Get the reply to a message if it's relevant to the conversation
 async def get_reply(message):
     reply = ""
@@ -214,7 +215,6 @@ async def get_reply(message):
             return reply
     return reply
 
-
 async def handle_llm_response(content, response):
     try:
         llm_response = json.loads(response.decode("utf-8"))
@@ -242,7 +242,6 @@ def extract_data_from_response(llm_response):
             return llm_response["choices"][0]["text"]
         except (KeyError, IndexError):
             return ""  # Return an empty string if data extraction fails
-
 
 async def send_to_model_queue():
     global text_api
@@ -286,7 +285,6 @@ async def send_to_model_queue():
                         1
                     )  # Add a delay to avoid excessive API requests
 
-
 async def send_to_stable_diffusion_queue():
     global image_api
     while True:
@@ -313,7 +311,6 @@ async def send_to_stable_diffusion_queue():
                 }
                 queue_to_send_message.put_nowait(queue_item)
                 queue_to_process_image.task_done()
-
 
 # All messages are checked to not be over Discord's 2000 characters limit - They are split at the last new line and sent concurrently if they are
 async def send_large_message(original_message, reply_content, file=None):
@@ -357,7 +354,6 @@ async def send_to_user_queue():
         )
         queue_to_send_message.task_done()
 
-
 @client.event
 async def on_ready():
     # Let owner known in the console that the bot is now running!
@@ -385,21 +381,17 @@ async def on_ready():
     # Sync current slash commands (commented out unless we have new commands)
     await client.tree.sync()
 
-
 UserContextLocation = "context/users"
-
 
 @client.event
 async def on_message(message):
     # Bot will now either do or not do something!
     await bot_behavior(message)
 
-
 # Slash command to update the bot's personality
 personality = app_commands.Group(
     name="personality", description="View or change the bot's personality."
 )
-
 
 @personality.command(name="view", description="View the bot's personality profile.")
 async def view_personality(interaction):
@@ -407,7 +399,6 @@ async def view_personality(interaction):
     await interaction.response.send_message(
         "The bot's current personality: **" + character_card["persona"] + "**."
     )
-
 
 @personality.command(name="set", description="Change the bot's personality.")
 @app_commands.describe(persona="Describe the bot's new personality.")
@@ -424,7 +415,6 @@ async def edit_personality(interaction, persona: str):
         + character_card["persona"]
         + '".'
     )
-
 
 @personality.command(
     name="reset", description="Reset the bot's personality to the default."
@@ -443,12 +433,10 @@ async def reset_personality(interaction):
         + '".'
     )
 
-
 # Slash commands to update the conversation history
 history = app_commands.Group(
     name="conversation-history", description="View or change the bot's personality."
 )
-
 
 @history.command(
     name="reset", description="Reset your conversation history with the bot."
@@ -505,7 +493,6 @@ async def view_history(interaction):
             "Message history is more than 2000 characters and can't be displayed."
         )
 
-
 # Slash commands for character card presets (if not interested in manually updating)
 character = app_commands.Group(
     name="character-cards",
@@ -543,7 +530,6 @@ async def change_character(interaction):
         "Select a character card", view=view, ephemeral=True
     )
 
-
 async def character_select_callback(interaction):
 
     await interaction.response.defer()
@@ -568,7 +554,6 @@ async def character_select_callback(interaction):
         + character_card["persona"]
         + "."
     )
-
 
 # Slash commands for character card presets (if not interested in manually updating)
 parameters = app_commands.Group(
@@ -610,7 +595,6 @@ async def change_parameters(interaction):
         "Select a character card", view=view, ephemeral=True
     )
 
-
 async def parameter_select_callback(interaction):
 
     await interaction.response.defer()
@@ -629,7 +613,6 @@ async def parameter_select_callback(interaction):
     await interaction.followup.send(
         interaction.user.name + " updated the bot's sampler parameters. " + api_check
     )
-
 
 try:
     client.run(discord_api_key)

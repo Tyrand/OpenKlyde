@@ -10,7 +10,6 @@ import datetime
 from datetime import datetime
 import wikipedia
 
-
 async def set_api(config_file):
     # Set API struct from JSON file
     file = get_file_name("configurations", config_file)
@@ -19,7 +18,6 @@ async def set_api(config_file):
     if contents is not None:
         api.update(contents)
     return api
-
 
 async def api_status_check(link, headers):
     # Check if any API is running
@@ -33,11 +31,9 @@ async def api_status_check(link, headers):
         status = False
     return status
 
-
 def get_file_name(directory, file_name):
     # Create file path from name and directory
     return os.path.join(directory, file_name)
-
 
 async def get_json_file(filename):
     # Read JSON file, return content or None
@@ -54,7 +50,6 @@ async def get_json_file(filename):
         await write_to_log("An unexpected error occurred: " + e)
         return None
 
-
 async def write_to_log(information):
     # Write a line to the log file
     file = get_file_name("", "log.txt")
@@ -62,13 +57,11 @@ async def write_to_log(information):
     text = str(current_time) + " " + information + "\n"
     await append_text_file(file, text)
 
-
 def check_for_image_request(user_message):
    # Check if user is looking for an image to be generated
    user_message = user_message.lower()
    pattern = re.compile('(send|create|give|generate|draw|snap|show|take|message).*?(image|picture|photo|photogragh|pic|drawing|painting|screenshot)')
    return bool(pattern.search(user_message))
-
 
 async def create_text_prompt(
     user_input, user, character, bot, memory, history, reply, text_api
@@ -85,7 +78,6 @@ async def create_text_prompt(
         else {"stop_sequence": stop_sequence}
     )
     return json.dumps(data)
-
 
 async def create_image_prompt(user_input, character, text_api):
     # Create an image prompt for image generation
@@ -105,7 +97,6 @@ async def create_image_prompt(user_input, character, text_api):
         else {"stop_sequence": stop_sequence}
     )
     return json.dumps(data)
-
 
 async def get_user_memory(user, characters):
     # Get user's conversation memory
@@ -139,7 +130,6 @@ async def get_user_memory(user, characters):
         )
         return None, 0
 
-
 async def get_guild_memory(guild, characters):
     # Get guild conversation history
     file_path = get_file_name("memory/guilds", f"{guild.name}.txt")
@@ -171,7 +161,6 @@ async def get_guild_memory(guild, characters):
             f"An unexpected error occurred while accessing {file_path}: {e}"
         )
         return None, 0
-
 
 async def get_channel_history(guild, channelName, characters):
     # Get channel conversation history
@@ -205,15 +194,12 @@ async def get_channel_history(guild, channelName, characters):
         )
         return None, 0
 
-
 async def get_user_history(user, characters):
     # Get user's conversation history
     file_path = get_file_name("context/users", f"{user.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            if len(contents) > characters:
-                contents = contents[-characters:]
             print("Accessed:", file_path)
             print(
                 "Total characters:",
@@ -221,6 +207,9 @@ async def get_user_history(user, characters):
                 "Total user_history lines:",
                 contents.count("\n"),
             )
+            if len(contents) > characters:
+                contents = contents[-characters:]
+
             trimmed_contents = contents.strip()
             print(
                 "Trimmed characters:",
@@ -238,13 +227,11 @@ async def get_user_history(user, characters):
         )
         return None, 0
 
-
 async def add_to_user_history(message, userName, file, user):
     # Add message to user's conversation history
     file_name = get_file_name("context/users", f"{user.name}.txt")
     content = f"{userName}: {message}\n"
     await append_text_file(file_name, content)
-
 
 async def add_to_channel_history(guild, channel, user, content):
     # Add message to channel's conversation history
@@ -254,7 +241,6 @@ async def add_to_channel_history(guild, channel, user, content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     message = f"{timestamp} {user.name}: {content}\n"
     await append_text_file(file_name, message)
-
 
 async def get_txt_file(filename, characters):
     # Get contents of a text file
@@ -273,7 +259,6 @@ async def get_txt_file(filename, characters):
         await write_to_log(f"An unexpected error occurred: {e}")
         return None, 0
 
-
 async def prune_text_file(file, trim_to):
     # Prune lines from a text file
     try:
@@ -284,7 +269,6 @@ async def prune_text_file(file, trim_to):
     except FileNotFoundError:
         await write_to_log(f"Could not prune file {file} because it doesn't exist.")
 
-
 async def append_text_file(file, text):
     # Append text to a file
     directory = os.path.dirname(file)
@@ -294,7 +278,6 @@ async def append_text_file(file, text):
     with open(file, "a+", encoding="utf-8") as context:
         context.write(text)
 
-
 def clean_user_message(user_input):
     # Clean user input to the bot
     bot_tags = [re.escape("@TyrandBot#6275").lower(), re.escape("@TyrandBot").lower()]
@@ -302,7 +285,6 @@ def clean_user_message(user_input):
     pattern = re.compile("|".join(bot_tags), re.IGNORECASE)
     cleaned_input = pattern.sub("", user_input)
     return cleaned_input.strip()
-
 
 async def clean_llm_reply(message, userName, bot):
     # Clean generated reply
@@ -317,20 +299,17 @@ async def clean_llm_reply(message, userName, bot):
     )  # Replace consecutive line breaks with a single line break
     return cleaned_message.strip()
 
-
 def get_character(character_card):
     # Get current bot character in prompt-friendly format
     # character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}Here is how you speak: \n{', '.join(character_card['examples'])}\n"
     character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}\n"
     return character
 
-
 async def get_character_card(name):
     # Get contents of a character file
     file = get_file_name("characters", name)
     contents = await get_json_file(file)
     return contents if contents is not None else {}
-
 
 def get_file_list(directory):
     # Get list of all available characters
@@ -341,7 +320,6 @@ def get_file_list(directory):
     except OSError:
         files = []
     return files
-
 
 def image_from_string(image_string):
     # Create an image from a base64-encoded string
