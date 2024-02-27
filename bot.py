@@ -149,7 +149,7 @@ async def bot_answer(message):
         if userMemory is None or userMemory == "(None, 0)":
             userMemory = ""
         if message.guild:
-            guildMemory = str(await functions.get_guild_memory(user, GuildMemoryAmount))
+            guildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             if guildMemory is None or guildMemory == "(None, 0)":
                 guildMemory = ""
             userMemory = guildMemory + userMemory
