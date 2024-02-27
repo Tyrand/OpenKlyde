@@ -263,8 +263,14 @@ async def get_user_history(user, characters):
 async def add_to_user_history(message, userName, file, user):
     # Add message to user's conversation history
     file_name = get_file_name("context\\users", f"{user.name}.txt")
-    content = f"{userName}: {message}\n"
-    await append_text_file(file_name, content)
+    if LogNoTextUploads and not content:
+        content = "<image or video>"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if AddTimestamp:
+        message = f"{timestamp} {user.name}: {content}\n"
+    message = f"{user.name}: {content}\n"
+    if content is not None:
+        await append_text_file(file_name, message)
 
 async def add_to_channel_history(guild, channel, user, content):
     # Add message to channel's conversation history
