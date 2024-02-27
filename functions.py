@@ -275,7 +275,8 @@ async def add_to_channel_history(guild, channel, user, content):
     if AddTimestamp:
         message = f"{timestamp} {user.name}: {content}\n"
     message = f"{user.name}: {content}\n"
-    await append_text_file(file_name, message)
+    if content is not None:
+        await append_text_file(file_name, message)
 
 async def get_txt_file(filename, characters):
     # Get contents of a text file
