@@ -112,12 +112,16 @@ async def bot_behavior(message):
     return False
 
 async def bot_answer(message):
-    # Check if the bot is in single guild or single channel mode and then, if true, check if the message is from the correct guild or channel
+    # Check if the bot is allowed to respond to direct messages
     if not AllowDirectMessages:
-        if SingleGuildMode and (message.guild.id != SingleGuildModeID or message.guild.name != SingleGuildModeName):
-            return
-        if SingleChannelMode and (message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName):
-            return
+        # Check if the user has administrator permissions in the guild, if they do, allow the bot to respond
+        if not message.author.guild_permissions.administrator:
+            # Check if the bot is in single guild mode and if the message is from the correct guild
+            if SingleGuildMode and (message.guild.id != SingleGuildModeID or message.guild.name != SingleGuildModeName):
+                return
+            # Check if the bot is in single channel mode and if the message is from the correct channel
+            if SingleChannelMode and (message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName):
+                return
     # React to the message so the user knows we're working on it
     await message.add_reaction(ReactionEmoji)
     # Send the typing status to the channel so the user knows we're working on it
@@ -283,16 +287,16 @@ async def send_to_model_queue():
                     await functions.write_to_log(
                         f"Received API response from LLM model: {response_data}"
                     )
-                    if response_data["results"][0][
-                        "text"
-                    ].strip() != "" or response_data["results"][0]["text"].startswith(
-                        "\n"
+                    # if the response is not empty, and does not start with a newline or "\n\n", send it to be cleaned then sent to the user
+                    if (response_data["results"][0]["text"].strip()
+                        and not response_data["results"][0]["text"].startswith("\n\\n")
+                        and not response_data["results"][0]["text"].startswith("\n\n")
                     ):
                         # Send the response to get cleaned of any stop sequences
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
                         break
-                    # Repeat the loop if response_data["text"] is empty
+                    # If the response is empty, or starts with a newline, send the prompt again
                     await asyncio.sleep(
                         1
                     )  # Add a delay to avoid excessive API requests
