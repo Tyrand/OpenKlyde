@@ -142,7 +142,7 @@ async def bot_answer(message):
         if History is None or History == "(None, 0)":
             History = ""
         if UseChannelHistory and message.channel:
-            ChannelHistory = str(await functions.get_channel_memory(message.channel, ChannelHistoryAmount))
+            ChannelHistory = str(await functions.get_channel_history(message.channel, ChannelHistoryAmount))
             if ChannelHistory is None or ChannelHistory == "(None, 0)":
                 ChannelHistory = ""
             History = ChannelHistory + History

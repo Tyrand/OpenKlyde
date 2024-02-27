@@ -162,9 +162,9 @@ async def get_guild_memory(guild, characters):
         )
         return None, 0
 
-async def get_channel_memory(guild, channelName, characters):
+async def get_channel_memory(channel, characters):
     # Get channel conversation memory
-    file_path = get_file_name(f"memory\\guilds/{guild.name}", f"{channelName}.txt")
+    file_path = get_file_name(f"memory\\guilds/{channel.guild.name}", f"{channel.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -194,9 +194,9 @@ async def get_channel_memory(guild, channelName, characters):
         )
         return None, 0
 
-async def get_channel_history(guild, channelName, characters):
+async def get_channel_history(channel, characters):
     # Get channel conversation history
-    file_path = get_file_name(f"context\\guilds/{guild.name}", f"{channelName}.txt")
+    file_path = get_file_name(f"context\\guilds/{channel.guild.name}", f"{channel.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
