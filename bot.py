@@ -177,6 +177,7 @@ async def bot_answer(message):
         "user_input": user_input,
         "userName": userName,
         "user": user,
+        "BotDisplayName": client.user.display_name,
         "image": image_request,
     }
     queue_to_process_message.put_nowait(queue_item)
@@ -294,6 +295,12 @@ async def send_to_model_queue():
                         and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")  
                         and not response_data["results"][0]["text"].startswith(f"\n\n{character_card['name']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n{character_card['name']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n\\n{content['userName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n\n{content['userName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n{content['userName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n\\n{content['BotDisplayName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n\n{content['BotDisplayName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n{content['BotDisplayName']}:")
                     ):
                         # Send the response to the next step
                         await handle_llm_response(content, response_data)
