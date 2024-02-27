@@ -67,7 +67,7 @@ async def bot_behavior(message):
             return True
 
     # If the bot is mentioned in a message or replied to, reply to the message
-    if client.user.mentioned_in(message) or message.reference and message.reference.resolved.author == client.user:
+    if client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user):
         await bot_answer(message)
         return True
     
@@ -121,6 +121,7 @@ async def bot_answer(message):
     if image_request:
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
+        Memory = ""
         reply = await get_reply(message)
         if UseUserMemory:
             Memory = str(await functions.get_user_memory(user, UserMemoryAmount))
