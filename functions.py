@@ -163,9 +163,9 @@ async def get_guild_memory(guild, characters):
         )
         return None, 0
 
-async def get_channel_memory(channel, characters):
+async def get_channel_memory(GuildName, ChannelName, characters):
     # Get channel conversation memory
-    file_path = get_file_name(f"memory\\guilds\\{channel.guild.name}", f"{channel.name}.txt")
+    file_path = get_file_name(f"memory\\guilds\\{GuildName}", f"{ChannelName}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -195,9 +195,9 @@ async def get_channel_memory(channel, characters):
         )
         return None, 0
 
-async def get_channel_history(channel, characters):
+async def get_channel_history(GuildName, ChannelName, characters):
     # Get channel conversation history
-    file_path = get_file_name(f"context\\guilds\\{channel.guild.name}", f"{channel.name}.txt")
+    file_path = get_file_name(f"context\\guilds\\{GuildName}", f"{ChannelName}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -260,15 +260,16 @@ async def get_user_history(user, characters):
         )
         return None, 0
 
-async def add_to_user_history(message, userName, file, user):
+async def add_to_user_history(content, userName, file, user):
     # Add message to user's conversation history
     file_name = get_file_name("context\\users", f"{user.name}.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if AddTimestamp:
-        message = f"{timestamp} {user.name}: {content}\n"
-    message = f"{user.name}: {content}\n"
+        message = f"{timestamp} {userName}: {content}\n"
+    else:
+        message = f"{userName}: {content}\n"
     if content is not None:
         await append_text_file(file_name, message)
 
@@ -280,7 +281,8 @@ async def add_to_channel_history(guild, channel, user, content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if AddTimestamp:
         message = f"{timestamp} {user.name}: {content}\n"
-    message = f"{user.name}: {content}\n"
+    else:
+        message = f"{user.name}: {content}\n"
     if content is not None:
         await append_text_file(file_name, message)
 

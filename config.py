@@ -9,7 +9,7 @@ UserHistoryAmount = 6000
 
 UseChannelHistory = False # Set to True to enable channel history (Multi-user mode)
 ChannelHistoryAmount = 6000
-ChannelHistoryOveride = "" # Set to the desired channel name to use for ChannelHistory if not using the same channel as the message
+ChannelHistoryOverride = "" # Set to the desired channel name to use for ChannelHistory if not using the same channel as the message
 
 UserMemoryAmount = 3000
 UseUserMemory = True # Set to False to disable user memory

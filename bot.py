@@ -127,25 +127,31 @@ async def bot_answer(message):
             if Memory is None or Memory == "(None, 0)":
                 Memory = ""
         if UseGuildMemory and message.guild:
-            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
+            GuildMemory = str(await functions.get_guild_memory(message.guild.name, GuildMemoryAmount))
             if GuildMemory is None or GuildMemory == "(None, 0)":
                 GuildMemory = ""
             Memory = GuildMemory + Memory
-        if UseChannelMemory and message.channel:
-            ChannelMemory = str(await functions.get_channel_memory(message.channel, ChannelMemoryAmount))
+        if UseChannelMemory and message.guild:
+            if ChannelHistoryOverride:
+                ChannelName = ChannelHistoryOverride
+            else:
+                ChannelName = message.channel.name
+            ChannelMemory = str(await functions.get_channel_memory(message.guild.name, ChannelName, ChannelMemoryAmount))
             if ChannelMemory is None or ChannelMemory == "(None, 0)":
                 ChannelMemory = ""
             Memory = ChannelMemory + Memory
         History = str(await functions.get_user_history(user, UserHistoryAmount))
         if History is None or History == "(None, 0)":
             History = ""
-        if UseChannelHistory and message.channel:
-            if ChannelHistoryOveride:
-                message.channel.name = ChannelHistoryOveride
-            ChannelHistory = str(await functions.get_channel_history(message.channel, ChannelHistoryAmount))
+        if UseChannelHistory and message.guild:
+            if ChannelHistoryOverride:
+                ChannelName = ChannelHistoryOverride
+            else:
+                ChannelName = message.channel.name
+            ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
             if ChannelHistory is None or ChannelHistory == "(None, 0)":
                 ChannelHistory = ""
-            History = ChannelHistory + History
+            History = f"[Chat log for channel '{message.channel.name}' begins]" + ChannelHistory + f"[Chat log for channel '{message.channel.name}' ends]" + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
             user,
@@ -161,8 +167,8 @@ async def bot_answer(message):
             print("User:", user)
             print("Character:", character)
             print("Character Card Name:", character_card['name'])
-            print("User Memory:", userMemory[:50])
-            print("User History:", user_history[:50])
+            print("User Memory:", Memory[:50])
+            print("User History:", History[:50])
             print("Reply:", reply)
             print("Text API:", text_api)
     queue_item = {
@@ -287,6 +293,7 @@ async def send_to_model_queue():
                         # We don't want to send this to the next step because it'd get cleaned and become an empty message
                         and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")  
                         and not response_data["results"][0]["text"].startswith(f"\n\n{character_card['name']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n{character_card['name']}:")
                     ):
                         # Send the response to the next step
                         await handle_llm_response(content, response_data)
