@@ -1,21 +1,3 @@
-import os
-import discord
-import requests
-import json
-import asyncio
-import httpx
-import aiohttp
-import random
-import functions
-import datetime
-import time
-from aiohttp import ClientSession
-from discord.ext import commands
-from discord import app_commands
-from discord import Interaction
-import asyncio
-import json
-
 # API Keys and Configuration
 # Your API keys and tokens go here. Do not commit with these in place!
 discord_api_key = "INSERT_YOUR_DISCORD_BOT_API_KEY_HERE"
@@ -36,9 +18,24 @@ IgnoreSymbols = False # set to True to ignore messages which start with common s
 #KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size // Not yet implemented
 #LogFileLimit = 100 # set to the maximum number of lines to keep in a log file // Not yet implemented
 
+import os
+import discord
+import requests
+import json
+import asyncio
+import httpx
+import aiohttp
+import random
+import functions
+import datetime
+import time
+from discord.ext import commands
+import asyncio
+import json
+
+client = commands.Bot(command_prefix="$", intents=intents)
 intents = discord.Intents.all()
 intents.message_content = True
-client = commands.Bot(command_prefix="$", intents=intents)
 # Create our queues up here somewhere
 queue_to_process_message = asyncio.Queue()  # Process messages and send to LLM
 queue_to_process_image = asyncio.Queue()  # Process images from SD API
@@ -51,12 +48,11 @@ image_api = {}
 status_last_update = None
 
 async def bot_behavior(message):
-    # If the bot, or another bot, wrote the message, don't respond.
+    # If the bot, or another bot, wrote the message, don't respond
     if (
         message.author == client.user
         or message.author.bot
     ):
-        # if message.author == client.user or message.author.bot:
         return False
     
     # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
@@ -202,7 +198,7 @@ async def get_reply(message):
                     + referenced_message.clean_content
                     + "\n"
                 )
-                reply = functions.clean_user_message(reply)
+                reply = functions.clean_user_message(client,reply)
                 return reply
         # If the referenced message isn't from the bot, use it in the reply
         if referenced_message.author != client.user:

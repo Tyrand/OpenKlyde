@@ -278,10 +278,9 @@ async def append_text_file(file, text):
     with open(file, "a+", encoding="utf-8") as context:
         context.write(text)
 
-def clean_user_message(user_input):
+def clean_user_message(client,user_input):
     # Clean user input to the bot
-    bot_tags = [re.escape("@TyrandBot#6275").lower(), re.escape("@TyrandBot").lower()]
-    user_input_lower = user_input.lower()
+    bot_tags = [re.escape(f"@{client.user.name}#{client.user.discriminator}").lower(), re.escape(f"@{client.user.name}").lower()]
     pattern = re.compile("|".join(bot_tags), re.IGNORECASE)
     cleaned_input = pattern.sub("", user_input)
     return cleaned_input.strip()
@@ -290,7 +289,7 @@ async def clean_llm_reply(message, userName, bot):
     # Clean generated reply
     bot_lower, userName_lower = bot.lower(), userName.lower()
     pattern = re.compile(
-        re.escape(bot_lower) + r":|" + re.escape(userName_lower) + r":|You:|#bots",
+        re.escape(bot_lower) + r":|" + re.escape(userName_lower) + r":|You:",
         re.IGNORECASE,
     )
     cleaned_message = pattern.sub("", message)
