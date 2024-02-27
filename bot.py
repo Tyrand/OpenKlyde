@@ -59,7 +59,18 @@ async def bot_behavior(message):
             )
         ):
             return False
-        
+    
+    if message.guild is None and not message.author.bot:
+        if AllowDirectMessages:
+            await bot_answer(message)
+            return True
+        else:
+            return False
+    
+    if message.guild and message.author.guild_permissions.administrator:
+        # If the user has administrator permissions in the guild, allow the bot to respond
+        return True
+    
     if SingleChannelMode and SingleChannelModeMentionNotRequired:
         # If the bot is in single channel mode and mention is not required, reply to all messages in the channel
         if message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName:
@@ -70,11 +81,16 @@ async def bot_behavior(message):
     if client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user):
         await bot_answer(message)
         return True
+
+
+    # Check if the bot is in single guild mode - if it, is check if the message is from the correct guild
+    if SingleGuildMode:
+        if message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName:
+            return True
     
-    if AllowDirectMessages:
-        #If someone DMs the bot, reply to them in the same DM
-        if message.guild is None and not message.author.bot:
-            await bot_answer(message)
+    # Check if the bot is in single channel mode - if it, is check if the message is from the correct channel
+    if SingleChannelMode:
+        if message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName:
             return True
     
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
@@ -88,19 +104,10 @@ async def bot_behavior(message):
     # If someone wants me to be chatty, change personality on the fly to chatterbox
     # If someone asks for a meme, generate an image of a meme on the fly
     # If playing a game or telling a story, add an image to the story
+    
     return False
 
 async def bot_answer(message):
-    # Check if the bot is allowed to respond to direct messages
-    if not AllowDirectMessages:
-        # Check if the user has administrator permissions in the guild, if they do, allow the bot to respond
-        if not message.author.guild_permissions.administrator:
-            # Check if the bot is in single guild mode and if the message is from the correct guild
-            if SingleGuildMode and (message.guild.id != SingleGuildModeID or message.guild.name != SingleGuildModeName):
-                return
-            # Check if the bot is in single channel mode and if the message is from the correct channel
-            if SingleChannelMode and (message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName):
-                return
     # React to the message so the user knows we're working on it
     await message.add_reaction(ReactionEmoji)
     user = message.author

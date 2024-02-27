@@ -43,6 +43,5 @@ SingleGuildModeID = "" # set to the desired channel ID if SingleGuildMode is Tru
 SingleGuildModeName = "" # set to the desired channel name if SingleGuildMode is True
 
 # Not yet implemented
-#ChannelContextAmount = 4000
 #KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size
 #LogFileLimit = 100 # set to the maximum number of lines to keep in a log file
