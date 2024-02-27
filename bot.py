@@ -7,16 +7,23 @@ UserMemoryAmount = 1000
 GuildMemoryAmount = 1000
 UserContextAmount = 4000
 AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
-SingleChannelMode = False # set to True to only track and reply messages from a single channel
-SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
-SingleChannelModeName = "" # set to the desired channel name if singleChannelMode is True
+ReplyToBots = False # set to True to allow the bot to respond to other bots
 LogAllMessages = False # set to True to log all messages to a file
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
 
+SingleChannelMode = False # set to True to only track and reply messages from a single channel
+SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
+SingleChannelModeName = "" # set to the desired channel name if singleChannelMode is True
+SingleChannelModeMentionNotRequired = False # set to True to reply to all messages in the channel without needing to be mentioned
+
+SingleGuildMode = False # set to True to only track and reply messages from a single guild (server)
+SingleGuildModeID = "" # set to the desired channel ID if SingleGuildMode is True
+SingleGuildModeName = "" # set to the desired channel name if SingleGuildMode is True
+
 # Not yet implemented
-#ChannelContextAmount = 4000 # To be implemented
-#KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size // Not yet implemented
-#LogFileLimit = 100 # set to the maximum number of lines to keep in a log file // Not yet implemented
+#ChannelContextAmount = 4000
+#KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size
+#LogFileLimit = 100 # set to the maximum number of lines to keep in a log file
 
 import os
 import discord
@@ -25,16 +32,18 @@ import json
 import asyncio
 import httpx
 import aiohttp
+from aiohttp import ClientSession
 import random
 import functions
 import datetime
 import time
-from discord.ext import commands
-import asyncio
-import json
 
-client = commands.Bot(command_prefix="$", intents=intents)
+from discord.ext import commands
+from discord import app_commands
+from discord import Interaction
+
 intents = discord.Intents.all()
+client = commands.Bot(command_prefix="$", intents=intents)
 intents.message_content = True
 # Create our queues up here somewhere
 queue_to_process_message = asyncio.Queue()  # Process messages and send to LLM
@@ -48,35 +57,35 @@ image_api = {}
 status_last_update = None
 
 async def bot_behavior(message):
-    # If the bot, or another bot, wrote the message, don't respond
-    if (
-        message.author == client.user
-        or message.author.bot
-    ):
-        return False
-    
-    # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
-    if IgnoreSymbols:
-        if (
-            message.content.startswith(
-                (".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")
-            )
-            or message.content is None
-        ):
-            return False
-        
-    if SingleChannelMode:
-        # If the message is in singleChannelModeID , reply to the message
-        if message.channel.id == SingleChannelModeName:
-            await bot_answer(message)
-            return True
-        
     if LogAllMessages:
         # log all messages into seperate channel files
         if message.guild:
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
+    
+    # Don't respond to yourself or other bots unless specified
+    if (
+        message.author == client.user
+        or message.author.bot and not ReplyToBots
+    ):
+        return False
+    
+    # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
+    if IgnoreSymbols:
+        if (
+            message.content is None
+            or message.content.startswith(
+                (".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")
+            )
+        ):
+            return False
+        
+    if SingleChannelMode and SingleChannelModeMentionNotRequired:
+        # If the bot is in single channel mode and mention is not required, reply to all messages in the channel
+        if message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName:
+            await bot_answer(message)
+            return True
 
     # If the bot is mentioned in a message, reply to the message
     if client.user.mentioned_in(message):
@@ -88,6 +97,7 @@ async def bot_behavior(message):
         if message.guild is None and not message.author.bot:
             await bot_answer(message)
             return True
+    
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
     # If someone speaks in a channel, there will be a three percent chance of answering (only in chatbots and furbies)
     # If I'm bored, ping someone with a message history
@@ -102,6 +112,12 @@ async def bot_behavior(message):
     return False
 
 async def bot_answer(message):
+    # Check if the bot is in single guild or single channel mode and then, if true, check if the message is from the correct guild or channel
+    if not AllowDirectMessages:
+        if SingleGuildMode and (message.guild.id != SingleGuildModeID or message.guild.name != SingleGuildModeName):
+            return
+        if SingleChannelMode and (message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName):
+            return
     # React to the message so the user knows we're working on it
     await message.add_reaction(ReactionEmoji)
     # Send the typing status to the channel so the user knows we're working on it
@@ -110,7 +126,7 @@ async def bot_answer(message):
     userID = message.author.id
     userName = message.author.name
     # Clean the user's message to make it easy to read
-    user_input = functions.clean_user_message(message.clean_content)
+    user_input = functions.clean_user_message(client,message.clean_content)
     if isinstance(message.channel, discord.TextChannel):
         print(f"{message.channel.name} | {userName}: {user_input}")
     else:
@@ -126,15 +142,15 @@ async def bot_answer(message):
     else:
         reply = await get_reply(message)
         userMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
-        if userMemory == "(None, 0)":
+        if userMemory is None or userMemory == "(None, 0)":
             userMemory = ""
         if message.guild:
             guildMemory = str(await functions.get_guild_memory(user, GuildMemoryAmount))
-        if guildMemory == "(None, 0)":
-            guildMemory = ""
-        userMemory = guildMemory + userMemory
+            if guildMemory is None or guildMemory == "(None, 0)":
+                guildMemory = ""
+            userMemory = guildMemory + userMemory
         user_history = str(await functions.get_user_history(user, UserContextAmount))
-        if user_history == "(None, 0)":
+        if user_history is None or user_history == "(None, 0)":
             user_history = ""
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
@@ -213,7 +229,7 @@ async def get_reply(message):
 
 async def handle_llm_response(content, response):
     try:
-        llm_response = json.loads(response.decode("utf-8"))
+        llm_response = response
         data = extract_data_from_response(llm_response)
         llm_message = await functions.clean_llm_reply(
             data, content["userName"], character_card["name"]
@@ -226,7 +242,7 @@ async def handle_llm_response(content, response):
             queue_to_send_message.put_nowait(queue_item)
     except json.JSONDecodeError:
         await functions.write_to_log(
-            "Invalid JSON response from LLM model: " + response.decode("utf-8")
+            "Invalid JSON response from LLM model: " + str(response)
         )
 
 
