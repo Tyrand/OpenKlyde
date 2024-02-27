@@ -22,8 +22,11 @@ UseChannelMemory = True # Set to False to disable channel memory
 
 AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
 ReplyToBots = False # set to True to allow the bot to respond to other bots
+
 LogAllMessages = False # set to True to log all messages to a file
 AddTimestamp = False # set to True to add a timestamp to the log file, seems to cause issue if used for ChannelHistory
+LogNoTextUploads = False # set to True to log messages without text content as <media>
+
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
 AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wikipedia articles
 RenameOldUserHistory = False # set to True to rename old user history files instead of deleting them
