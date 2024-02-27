@@ -457,13 +457,21 @@ async def reset_history(interaction):
 
     file_name = functions.get_file_name(UserContextLocation, str(user.name) + ".txt")
 
-    # Attempt to remove the file and let the user know what happened.
+    # Attempt to remove or rename the file based on the condition
     try:
-        os.remove(file_name)
-        await interaction.response.send_message(
-            "Your conversation history was deleted."
-        )
-        print("Conversation history file '{}' deleted.".format(file_name))
+        if RenameOldUserHistory:
+            new_file_name = file_name + "_" + datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            os.rename(file_name, new_file_name)
+            await interaction.response.send_message(
+                "Your conversation history was reset."
+            )
+            print("Conversation history file '{}' renamed to '{}'.".format(file_name, new_file_name))
+        else:
+            os.remove(file_name)
+            await interaction.response.send_message(
+                "Your conversation history was reset."
+            )
+            print("Conversation history file '{}' deleted.".format(file_name))
     except FileNotFoundError:
         await interaction.response.send_message("There was no history to delete.")
     except PermissionError:
