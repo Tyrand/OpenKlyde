@@ -9,6 +9,7 @@ UserHistoryAmount = 6000
 
 UseChannelHistory = False # Set to True to enable channel history (Multi-user mode)
 ChannelHistoryAmount = 6000
+ChannelHistoryOveride = "" # Set to the desired channel name to use for ChannelHistory if not using the same channel as the message
 
 UserMemoryAmount = 3000
 UseUserMemory = True # Set to False to disable user memory
@@ -22,6 +23,7 @@ UseChannelMemory = True # Set to False to disable channel memory
 AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 LogAllMessages = False # set to True to log all messages to a file
+AddTimestamp = False # set to True to add a timestamp to the log file, seems to cause issue if used for ChannelHistory
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
 AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wikipedia articles
 RenameOldUserHistory = False # set to True to rename old user history files instead of deleting them

@@ -103,8 +103,6 @@ async def bot_answer(message):
                 return
     # React to the message so the user knows we're working on it
     await message.add_reaction(ReactionEmoji)
-    # Send the typing status to the channel so the user knows we're working on it
-    await message.channel.typing()
     user = message.author
     userID = message.author.id
     userName = message.author.name
@@ -142,6 +140,8 @@ async def bot_answer(message):
         if History is None or History == "(None, 0)":
             History = ""
         if UseChannelHistory and message.channel:
+            if ChannelHistoryOveride:
+                message.channel.name = ChannelHistoryOveride
             ChannelHistory = str(await functions.get_channel_history(message.channel, ChannelHistoryAmount))
             if ChannelHistory is None or ChannelHistory == "(None, 0)":
                 ChannelHistory = ""
@@ -174,6 +174,8 @@ async def bot_answer(message):
         "image": image_request,
     }
     queue_to_process_message.put_nowait(queue_item)
+    # Send the typing status to the channel so the user knows we're working on it
+    await message.channel.typing()
 
 # Get the reply to a message if it's relevant to the conversation
 async def get_reply(message):
