@@ -100,7 +100,7 @@ async def create_image_prompt(user_input, character, text_api):
 
 async def get_user_memory(user, characters):
     # Get user's conversation memory
-    file_path = get_file_name("memory/users", f"{user.name}.txt")
+    file_path = get_file_name("memory\\users", f"{user.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -132,7 +132,7 @@ async def get_user_memory(user, characters):
 
 async def get_guild_memory(guild, characters):
     # Get guild conversation history
-    file_path = get_file_name("memory/guilds", f"{guild.name}.txt")
+    file_path = get_file_name("memory\\guilds", f"{guild.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -162,9 +162,41 @@ async def get_guild_memory(guild, characters):
         )
         return None, 0
 
+async def get_channel_memory(guild, channelName, characters):
+    # Get channel conversation memory
+    file_path = get_file_name(f"memory\\guilds/{guild.name}", f"{channelName}.txt")
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            contents = file.read()
+            print("Accessed:", file_path)
+            print(
+                "Total channel_memory characters:",
+                len(contents),
+                "Total channel_memory lines:",
+                contents.count("\n"),
+            )
+            if len(contents) > characters:
+                contents = contents[-characters:]
+            trimmed_contents = contents.strip()
+            print(
+                "Trimmed channel_memory characters:",
+                len(trimmed_contents),
+                "Trimmed channel_memory lines:",
+                trimmed_contents.count("\n"),
+            )
+            return trimmed_contents
+    except FileNotFoundError:
+        await write_to_log(f"File {file_path} not found. Where did you lose it?")
+        return None, 0
+    except Exception as e:
+        await write_to_log(
+            f"An unexpected error occurred while accessing {file_path}: {e}"
+        )
+        return None, 0
+
 async def get_channel_history(guild, channelName, characters):
     # Get channel conversation history
-    file_path = get_file_name(f"context/guilds/{guild.name}", f"{channelName}.txt")
+    file_path = get_file_name(f"context\\guilds/{guild.name}", f"{channelName}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -196,7 +228,7 @@ async def get_channel_history(guild, channelName, characters):
 
 async def get_user_history(user, characters):
     # Get user's conversation history
-    file_path = get_file_name("context/users", f"{user.name}.txt")
+    file_path = get_file_name("context\\users", f"{user.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -229,13 +261,13 @@ async def get_user_history(user, characters):
 
 async def add_to_user_history(message, userName, file, user):
     # Add message to user's conversation history
-    file_name = get_file_name("context/users", f"{user.name}.txt")
+    file_name = get_file_name("context\\users", f"{user.name}.txt")
     content = f"{userName}: {message}\n"
     await append_text_file(file_name, content)
 
 async def add_to_channel_history(guild, channel, user, content):
     # Add message to channel's conversation history
-    file_name = get_file_name("context/guilds/" + guild.name, f"{channel.name}.txt")
+    file_name = get_file_name("context\\guilds\\" + guild.name, f"{channel.name}.txt")
     if not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
