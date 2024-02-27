@@ -87,8 +87,8 @@ async def bot_behavior(message):
             await bot_answer(message)
             return True
 
-    # If the bot is mentioned in a message, reply to the message
-    if client.user.mentioned_in(message):
+    # If the bot is mentioned in a message or replied to, reply to the message
+    if client.user.mentioned_in(message) or message.reference and message.reference.resolved.author == client.user:
         await bot_answer(message)
         return True
     
