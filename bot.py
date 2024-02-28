@@ -60,16 +60,12 @@ async def bot_behavior(message):
         ):
             return False
     
-    if message.guild is None and not message.author.bot:
+    if message.guild is None:
         if AllowDirectMessages:
             await bot_answer(message)
             return True
         else:
             return False
-    
-    if message.guild and message.author.guild_permissions.administrator:
-        # If the user has administrator permissions in the guild, allow the bot to respond
-        return True
     
     if SingleChannelMode and SingleChannelModeMentionNotRequired:
         # If the bot is in single channel mode and mention is not required, reply to all messages in the channel
@@ -86,11 +82,13 @@ async def bot_behavior(message):
     # Check if the bot is in single guild mode - if it, is check if the message is from the correct guild
     if SingleGuildMode:
         if message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName:
+            await bot_answer(message)
             return True
     
     # Check if the bot is in single channel mode - if it, is check if the message is from the correct channel
     if SingleChannelMode:
         if message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName:
+            await bot_answer(message)
             return True
     
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
