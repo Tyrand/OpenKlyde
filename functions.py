@@ -326,6 +326,7 @@ def clean_user_message(client,user_input):
     # Clean user input to the bot
     bot_tags = [re.escape(f"@{client.user.name}#{client.user.discriminator}").lower(), re.escape(f"@{client.user.name}").lower()]
     pattern = re.compile("|".join(bot_tags), re.IGNORECASE)
+    pattern = re.sub(r"<@", "<", pattern)
     cleaned_input = pattern.sub("", user_input)
     return cleaned_input.strip()
 

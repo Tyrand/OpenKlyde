@@ -21,9 +21,10 @@ UseGuildMemory = True # Set to False to disable guild memory
 ChannelMemoryAmount = 3000
 UseChannelMemory = True # Set to False to disable channel memory
 
-AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
+AllowDirectMessages = True # set to True to allow the bot to respond to direct messages
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
+AllowBotToMention = False # set to True to allow the bot to mention (ping) users in its responses
 
 LogAllMessages = False # set to True to log all messages to a file
 AddTimestamp = False # set to True to add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model
