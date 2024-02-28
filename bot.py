@@ -76,7 +76,7 @@ async def bot_behavior(message):
         if message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName:
             return False
     # Check if mentions are required to trigger the bot    
-    if not MentionNotRequired:
+    if MentionOrReplyRequired:
         if not client.user.mentioned_in(message) or (not message.reference or message.reference.resolved.author != client.user):
             return False
 
