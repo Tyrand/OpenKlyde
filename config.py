@@ -22,7 +22,7 @@ UseChannelMemory = True # Set to False to disable channel memory
 
 AllowDirectMessages = False # set to True to allow the bot to respond to direct messages
 ReplyToBots = False # set to True to allow the bot to respond to other bots
-MentionOrReplyRequired = False # set to True to reply to all messages in the channel without needing to be mentioned
+MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
 
 LogAllMessages = False # set to True to log all messages to a file
 AddTimestamp = False # set to True to add a timestamp to the log file, seems to cause issue if used for ChannelHistory
