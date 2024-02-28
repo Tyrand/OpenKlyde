@@ -66,30 +66,23 @@ async def bot_behavior(message):
             return True
         else:
             return False
-    
-    if SingleChannelMode and SingleChannelModeMentionNotRequired:
-        # If the bot is in single channel mode and mention is not required, reply to all messages in the channel
-        if message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName:
-            await bot_answer(message)
-            return True
-
-    # If the bot is mentioned in a message or replied to, reply to the message
-    if client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user):
-        await bot_answer(message)
-        return True
-
 
     # Check if the bot is in single guild mode - if it, is check if the message is from the correct guild
     if SingleGuildMode:
-        if message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName:
-            await bot_answer(message)
-            return True
-    
-    # Check if the bot is in single channel mode - if it, is check if the message is from the correct channel
+        if message.guild.id != SingleGuildModeID or message.guild.name != SingleGuildModeName:
+            return False
+    # Check if the bot is in single channel mode - if it is, check if the message is from the correct channel
     if SingleChannelMode:
-        if message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName:
-            await bot_answer(message)
-            return True
+        if message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName:
+            return False
+    # Check if mentions are required to trigger the bot    
+    if not MentionNotRequired:
+        if not client.user.mentioned_in(message) or (not message.reference or message.reference.resolved.author != client.user):
+            return False
+
+    # If the message has not yet been returned False, the bot will respond
+    return True
+
     
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
     # If someone speaks in a channel, there will be a three percent chance of answering (only in chatbots and furbies)
@@ -102,8 +95,6 @@ async def bot_behavior(message):
     # If someone wants me to be chatty, change personality on the fly to chatterbox
     # If someone asks for a meme, generate an image of a meme on the fly
     # If playing a game or telling a story, add an image to the story
-    
-    return False
 
 async def bot_answer(message):
     # React to the message so the user knows we're working on it
