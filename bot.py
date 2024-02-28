@@ -41,6 +41,10 @@ async def bot_behavior(message):
                 message.guild, message.channel, message.author, message.content
             )
 
+    if profanity_check.predict([message.content])>0.8:
+            await message.add_reaction("⚠")
+            return False
+
     if MessageDebug:
         print(message.content)
     
@@ -125,7 +129,7 @@ async def bot_answer(message):
     # React to the message so the user knows we're working on it
     if DenyProfanity:
         # Deny the prompt if it doesn't pass the profanity filter
-        if profanity_check.predict([message.content])>ProfanityRating:
+        if profanity_check.predict([message.content])>=ProfanityRating:
             await message.add_reaction("❌")
             return False
     await message.add_reaction(ReactionEmoji)
@@ -154,7 +158,7 @@ async def bot_answer(message):
             if Memory is None or Memory == "(None, 0)":
                 Memory = ""
         if UseGuildMemory and message.guild:
-            GuildMemory = str(await functions.get_guild_memory(message.guild.name, GuildMemoryAmount))
+            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             if GuildMemory is None or GuildMemory == "(None, 0)":
                 GuildMemory = ""
             Memory = GuildMemory + Memory
@@ -313,13 +317,12 @@ async def send_to_model_queue():
                     await functions.write_to_log(
                         f"Received API response from LLM model: {response_data}"
                     )
-                    # If the response is not empty and doesn't start with the bot's name, send it to the next step
                     if (
-                        # Prevent the bot from trying to sending empty messages
-                        response_data["results"][0]["text"].strip() 
-                        # Common error where the bot immediately says it's own name
-                        # We don't want to send this to the next step because it'd get cleaned and become an empty message
-                        and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")  
+                        # Prevent the bot from trying to send empty messages
+                        response_data["results"][0]["text"].strip()
+                        # Common error where the bot immediately says its own name
+                        # We don't want to send this to the next step because it would get cleaned and become an empty message
+                        and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n\n{character_card['name']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n{character_card['name']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n\\n{content['userName']}:")
@@ -329,6 +332,9 @@ async def send_to_model_queue():
                         and not response_data["results"][0]["text"].startswith(f"\n\n{content['BotDisplayName']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n{content['BotDisplayName']}:")
                     ):
+                        if DenyProfanity and profanity_check.predict([response_data["results"][0]["text"]])[0] >= ProfanityRating:
+                            # Retry by continuing the loop
+                            continue
                         # Send the response to the next step
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
