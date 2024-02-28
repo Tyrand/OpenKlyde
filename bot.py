@@ -41,10 +41,6 @@ async def bot_behavior(message):
                 message.guild, message.channel, message.author, message.content
             )
 
-    if profanity_check.predict([message.content])>0.8:
-            await message.add_reaction("⚠")
-            return False
-
     if MessageDebug:
         print(message.content)
     
