@@ -44,7 +44,7 @@ async def bot_behavior(message):
     if MessageDebug:
         print(message.content)
     
-    # If the message is from a blocked user, don't respond
+  # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
             print("Denied: Blocked user")
@@ -298,7 +298,8 @@ async def send_to_model_queue():
             f"Sending API request to LLM model: {content['prompt']}"
         )
         async with aiohttp.ClientSession() as session:
-            while True:
+            retry_count = 0
+            while retry_count < 5:
                 async with session.post(
                     text_api["address"] + text_api["generation"],
                     headers=text_api["headers"],
@@ -310,19 +311,35 @@ async def send_to_model_queue():
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
+                    print(response_text)
                     if BadResponseSafeGuards:
                         if (
                             # Prevent the bot from trying to send empty messages
-                            response_text.strip()
+                            response_text.strip() is not None
                             # Common error where the bot immediately says its own name
                             # We don't want to send this to the next step because it would get cleaned and become an empty message
-                            and not re.match(r'^@[^:<>]{0,16}', response_text[:16])
-                            and not re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16])
-                            and not re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16])
-                            and not re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16])
+                            and not re.search(r'[@^:<>\[\]]', response_text[:16], re.IGNORECASE)
+                            and not re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE)
+                            and not re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16], re.IGNORECASE)
+                            and not re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16], re.IGNORECASE)
+                            and not re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
                         ):
+                            # Print the reason for catching the response
+                            if not response_text.strip():
+                                print("Empty message caught")
+                            elif re.search(r'[@^:<>\[\]]', response_text[:16]):
+                                print("Bot name caught:", response_text)
+                            elif re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16]):
+                                print("Character name caught:", response_text)
+                            elif re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16]):
+                                print("User name caught:", response_text)
+                            elif re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16]):
+                                print("Bot display name caught:", response_text)
+                            elif re.search(r'(?i)chat log for channel', response_text):
+                                print("Chat log caught:", response_text)
                             if DenyProfanity and profanity_check.predict([response_text])[0] >= ProfanityRating:
                                 # Retry by continuing the loop
+                                retry_count += 1
                                 continue
                         # Send the response to the next step
                         await handle_llm_response(content, response_data)
@@ -332,6 +349,12 @@ async def send_to_model_queue():
                     await asyncio.sleep(
                         1
                     )  # Add a delay to avoid excessive API requests (in seconds)
+                retry_count += 1
+            if retry_count == 5:
+                response_text = '||Could not generate a response correctly after several attempts||'
+                print('results: '+[{'text': response_text}])
+                await handle_llm_response(content, response_text)
+                queue_to_process_message.task_done()
 
 async def send_to_stable_diffusion_queue():
     global image_api
@@ -674,3 +697,4 @@ try:
 except Exception as e:
     client.close()
     client.run(discord_api_key)
+    print("Bot restarted successfully.")
