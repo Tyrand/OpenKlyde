@@ -43,7 +43,7 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.content)
-
+    
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -173,7 +173,7 @@ async def bot_answer(message):
             ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
             if ChannelHistory is None or ChannelHistory == "(None, 0)":
                 ChannelHistory = ""
-            History = f"[Chat log for channel '{message.channel.name}' begins]" + ChannelHistory + f"[Chat log for channel '{message.channel.name}' ends]" + History
+            History = f"[Chat log for channel '{message.channel.name}' begins]" + ChannelHistory + f"[Chat log for channel '{message.channel.name}' ends][Current UTC time is " + {datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')}+"]" + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
             user,
@@ -313,14 +313,14 @@ async def send_to_model_queue():
                         response_data["results"][0]["text"].strip()
                         # Common error where the bot immediately says its own name
                         # We don't want to send this to the next step because it would get cleaned and become an empty message
-                        and not response_data["results"][0]["text"].startswith(f"\n\\n{character_card['name']}:")
-                        and not response_data["results"][0]["text"].startswith(f"\n\n{character_card['name']}:")
+                        and not response_data["results"][0]["text"].startswith(f"@{character_card['name']}")
+                        and not response_data["results"][0]["text"].startswith(f"@{content['userName']}")
+                        and not response_data["results"][0]["text"].startswith(f"@{content['BotDisplayName']}")
+                        and not response_data["results"][0]["text"].startswith(f"\n\{character_card['name']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n{character_card['name']}:")
-                        and not response_data["results"][0]["text"].startswith(f"\n\\n{content['userName']}:")
-                        and not response_data["results"][0]["text"].startswith(f"\n\n{content['userName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n\{content['userName']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n{content['userName']}:")
-                        and not response_data["results"][0]["text"].startswith(f"\n\\n{content['BotDisplayName']}:")
-                        and not response_data["results"][0]["text"].startswith(f"\n\n{content['BotDisplayName']}:")
+                        and not response_data["results"][0]["text"].startswith(f"\n\{content['BotDisplayName']}:")
                         and not response_data["results"][0]["text"].startswith(f"\n{content['BotDisplayName']}:")
                     ):
                         if DenyProfanity and profanity_check.predict([response_data["results"][0]["text"]])[0] >= ProfanityRating:
@@ -430,7 +430,7 @@ async def on_ready():
     # Sync current slash commands (commented out unless we have new commands)
     await client.tree.sync()
 
-UserContextLocation = "context/users"
+UserContextLocation = "context\\users"
 
 @client.event
 async def on_message(message):

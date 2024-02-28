@@ -70,7 +70,7 @@ async def create_text_prompt(
     # Create a text prompt for text generation
     prompt = f"{character}{memory}{history}{reply}{user.name}: {user_input}\n{bot}: "
     # stop_sequence = [f"{user.name}:", f"{bot}:", "You:"]
-    stop_sequence = [f"{user.name}:", f"{bot}:", "You:"]
+    stop_sequence = [f"{user.name}:", f"{bot}:", f"@{bot}", "You:"]
     data = text_api["parameters"]
     data.update({"prompt": prompt})
     data.update(
