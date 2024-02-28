@@ -31,7 +31,6 @@ AddTimestamp = False # set to True to add a timestamp to the log file, can cause
 LogNoTextUploads = False # set to True to log messages without text content as <media>
 
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
-AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wikipedia articles
 RenameOldUserHistory = False # set to True to rename old user history files instead of deleting them
 BadResponseSafeGuards = True # set to True to enable safe guards to prevent the bot from sending bad responses, like mimicing users.
 
@@ -48,5 +47,6 @@ SingleGuildModeID = "" # set to the desired channel ID if SingleGuildMode is Tru
 SingleGuildModeName = "" # set to the desired channel name if SingleGuildMode is True
 
 # Not yet implemented
+#AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wikipedia articles
 #KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size
 #LogFileLimit = 100 # set to the maximum number of lines to keep in a log file
