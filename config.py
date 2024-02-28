@@ -3,6 +3,7 @@
 discord_api_key = "INSERT_YOUR_DISCORD_BOT_API_KEY_HERE"
 ReactionEmoji = "⏲" # This is the emoji that the bot will react with when it is generating a response, it is removed when the response is sent
 PromptDebug = False # Set to True to print prompt debug information to the console
+MessageDebug = False # Set to True to print out how every message is processed
 
 # Memory Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
 UserHistoryAmount = 6000
@@ -25,7 +26,7 @@ ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
 
 LogAllMessages = False # set to True to log all messages to a file
-AddTimestamp = False # set to True to add a timestamp to the log file, seems to cause issue if used for ChannelHistory
+AddTimestamp = False # set to True to add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model
 LogNoTextUploads = False # set to True to log messages without text content as <media>
 
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs

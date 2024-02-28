@@ -33,14 +33,18 @@ status_last_update = None
 
 async def bot_behavior(message):
     if LogAllMessages:
-        # log all messages into seperate channel files
+        # log all messages into separate channel files
         if message.guild:
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
-    
+    if MessageDebug:
+        print(message.content)
+
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
+        if MessageDebug:
+            print("Blocked user")
         return False
 
     # Don't respond to yourself or other bots unless specified
@@ -48,6 +52,8 @@ async def bot_behavior(message):
         message.author == client.user
         or message.author.bot and not ReplyToBots
     ):
+        if MessageDebug:
+            print("Self or other bot")
         return False
     
     # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
@@ -58,6 +64,8 @@ async def bot_behavior(message):
                 (".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")
             )
         ):
+            if MessageDebug:
+                print("Empty message or starts with symbol")
             return False
     
     if message.guild is None:
@@ -65,24 +73,33 @@ async def bot_behavior(message):
             await bot_answer(message)
             return True
         else:
+            if MessageDebug:
+                print("Direct messages not allowed")
             return False
 
-    # Check if the bot is in single guild mode - if it, is check if the message is from the correct guild
-    if SingleGuildMode:
-        if message.guild.id != SingleGuildModeID or message.guild.name != SingleGuildModeName:
-            return False
+    # Check if the bot is in single guild mode - if it is, check if the message is from the correct guild
+    if SingleGuildMode and not (message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName):
+        if MessageDebug:
+            print("Guild id or name does not match")
+        return False
+
     # Check if the bot is in single channel mode - if it is, check if the message is from the correct channel
-    if SingleChannelMode:
-        if message.channel.id != SingleChannelModeID or message.channel.name != SingleChannelModeName:
-            return False
+    if SingleChannelMode and not (message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName):
+        if MessageDebug:
+            print("Channel id or name does not match")
+        return False
+
     # Check if mentions are required to trigger the bot    
-    if MentionOrReplyRequired:
-        if not client.user.mentioned_in(message) or (not message.reference or message.reference.resolved.author != client.user):
-            return False
+    if MentionOrReplyRequired and not (client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user)):
+        if MessageDebug:
+            print("Bot was not mentioned or replied to")
+        return False
 
     # If the message has not yet been returned False, the bot will respond
+    if MessageDebug:
+        print("Bot will respond")
+    await bot_answer(message)
     return True
-
     
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
     # If someone speaks in a channel, there will be a three percent chance of answering (only in chatbots and furbies)
