@@ -33,6 +33,7 @@ LogNoTextUploads = False # set to True to log messages without text content as <
 IgnoreSymbols = False # set to True to ignore messages which start with common symbols / emojis / URLs
 AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wikipedia articles
 RenameOldUserHistory = False # set to True to rename old user history files instead of deleting them
+BadResponseSafeGuards = True # set to True to enable safe guards to prevent the bot from sending bad responses, like mimicing users.
 
 BlockedUsers = [] # add user IDs, or names, to this list to block them from using the bot
 DenyProfanity = True # set to True to deny prompts which don't pass the profanity filter

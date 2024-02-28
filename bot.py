@@ -126,15 +126,15 @@ async def bot_answer(message):
     await message.add_reaction(ReactionEmoji)
     user = message.author
     userID = message.author.id
-    userName = message.author.name
+    UserName = message.author.name
     # Clean the user's message to make it easy to read
     user_input = functions.clean_user_message(client,message.clean_content)
     if isinstance(message.channel, discord.TextChannel):
-        print(f"{message.channel.name} | {userName}: {user_input}")
+        print(f"{message.channel.name} | {UserName}: {user_input}")
     else:
-        print(f"DM | {userName}: {user_input}")
+        print(f"DM | {UserName}: {user_input}")
     # Log the received message
-    await functions.write_to_log(f"Received message from {userName}: {user_input}")
+    await functions.write_to_log(f"Received message from {UserName}: {user_input}")
     # Is this an image request?
     image_request = functions.check_for_image_request(user_input)
     character = functions.get_character(character_card)
@@ -198,7 +198,7 @@ async def bot_answer(message):
         "prompt": prompt,
         "message": message,
         "user_input": user_input,
-        "userName": userName,
+        "UserName": UserName,
         "user": user,
         "BotDisplayName": client.user.display_name,
         "image": image_request,
@@ -258,7 +258,7 @@ async def handle_llm_response(content, response):
         llm_response = response
         data = extract_data_from_response(llm_response)
         llm_message = await functions.clean_llm_reply(
-            data, content["userName"], character_card["name"]
+            data, content["UserName"], character_card["name"]
         )
         queue_item = {"response": llm_message, "content": content}
 
@@ -289,8 +289,8 @@ async def send_to_model_queue():
         # Add the message to the user's history
         await functions.add_to_user_history(
             content["user_input"],
-            content["userName"],
-            content["userName"],
+            content["UserName"],
+            content["UserName"],
             content["user"],
         )
         # Log the API request
@@ -310,25 +310,20 @@ async def send_to_model_queue():
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
-                    if (
-                        # Prevent the bot from trying to send empty messages
-                        response_text.strip()
-                        # Common error where the bot immediately says its own name
-                        # We don't want to send this to the next step because it would get cleaned and become an empty message
-                        and not response_text.startswith(f"@{character_card['name']}")
-                        and not response_text.startswith(f"@{content['userName']}")
-                        and not response_text.startswith(f"@{content['BotDisplayName']}")
-                        and not response_text.startswith(f"\n\{character_card['name']}:")
-                        and not response_text.startswith(f"\n{character_card['name']}:")
-                        and not response_text.startswith(f"\n\{content['userName']}:")
-                        and not response_text.startswith(f"\n{content['userName']}:")
-                        and not response_text.startswith(f"\n\{content['BotDisplayName']}:")
-                        and not response_text.startswith(f"\n{content['BotDisplayName']}:")
-                        and not re.match(r'^[^:<>]{0,16}$', response_text)
-                    ):
-                        if DenyProfanity and profanity_check.predict([response_text])[0] >= ProfanityRating:
-                            # Retry by continuing the loop
-                            continue
+                    if BadResponseSafeGuards:
+                        if (
+                            # Prevent the bot from trying to send empty messages
+                            response_text.strip()
+                            # Common error where the bot immediately says its own name
+                            # We don't want to send this to the next step because it would get cleaned and become an empty message
+                            and not re.match(r'^@[^:<>]{0,16}', response_text[:16])
+                            and not re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16])
+                            and not re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16])
+                            and not re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16])
+                        ):
+                            if DenyProfanity and profanity_check.predict([response_text])[0] >= ProfanityRating:
+                                # Retry by continuing the loop
+                                continue
                         # Send the response to the next step
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
@@ -347,7 +342,7 @@ async def send_to_stable_diffusion_queue():
         data_json = json.dumps(data)
         await functions.write_to_log(
             "Sending prompt from "
-            + image_prompt["content"]["userName"]
+            + image_prompt["content"]["UserName"]
             + " to Stable Diffusion model."
         )
         async with ClientSession() as session:
@@ -401,7 +396,7 @@ async def send_to_user_queue():
         await functions.add_to_user_history(
             reply["response"],
             character_card["name"],
-            reply["content"]["userName"],
+            reply["content"]["UserName"],
             reply["content"]["user"],
         )
         queue_to_send_message.task_done()
@@ -495,8 +490,8 @@ history = app_commands.Group(
 )
 async def reset_history(interaction):
     user = interaction.user
-    userName = str(interaction.user.name)
-    userName = userName.replace(" ", "")
+    UserName = str(interaction.user.name)
+    UserName = UserName.replace(" ", "")
 
     file_name = functions.get_file_name(UserContextLocation, str(user.name) + ".txt")
 
@@ -532,8 +527,8 @@ async def view_history(interaction):
     # Get the user who started the interaction and find their file.
 
     user = interaction.user
-    userName = interaction.user.name
-    userName = userName.replace(" ", "")
+    UserName = interaction.user.name
+    UserName = UserName.replace(" ", "")
 
     file_name = functions.get_file_name(UserContextLocation, str(user.name) + ".txt")
 

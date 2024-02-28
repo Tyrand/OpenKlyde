@@ -260,16 +260,16 @@ async def get_user_history(user, characters):
         )
         return None, 0
 
-async def add_to_user_history(content, userName, file, user):
+async def add_to_user_history(content, UserName, file, user):
     # Add message to user's conversation history
     file_name = get_file_name("context\\users", f"{user.name}.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if AddTimestamp:
-        message = f"{timestamp} {userName}: {content}\n"
+        message = f"{timestamp} {UserName}: {content}\n"
     else:
-        message = f"{userName}: {content}\n"
+        message = f"{UserName}: {content}\n"
     if content is not None:
         await append_text_file(file_name, message)
 
@@ -329,11 +329,11 @@ def clean_user_message(client,user_input):
     cleaned_input = pattern.sub("", user_input)
     return cleaned_input.strip()
 
-async def clean_llm_reply(message, userName, bot):
+async def clean_llm_reply(message, UserName, bot):
     # Clean generated reply
-    bot_lower, userName_lower = bot.lower(), userName.lower()
+    bot_lower, UserName_lower = bot.lower(), UserName.lower()
     pattern = re.compile(
-        re.escape(bot_lower) + r":|" + re.escape(userName_lower) + r":|You:",
+        re.escape(bot_lower) + r":|" + re.escape(UserName_lower) + r":|You:",
         re.IGNORECASE,
     )
     cleaned_message = pattern.sub("", message)
