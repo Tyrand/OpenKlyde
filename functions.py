@@ -326,7 +326,6 @@ def clean_user_message(client,user_input):
     # Clean user input to the bot
     bot_tags = [re.escape(f"@{client.user.name}#{client.user.discriminator}").lower(), re.escape(f"@{client.user.name}").lower()]
     pattern = re.compile("|".join(bot_tags), re.IGNORECASE)
-    pattern = re.sub(r"<@", "<", pattern)
     cleaned_input = pattern.sub("", user_input)
     return cleaned_input.strip()
 
@@ -338,9 +337,9 @@ async def clean_llm_reply(message, userName, bot):
         re.IGNORECASE,
     )
     cleaned_message = pattern.sub("", message)
-    cleaned_message = re.sub(
-        r"\n{2,}", "\n", cleaned_message
-    )  # Replace consecutive line breaks with a single line break
+    if not AllowBotToMention:
+        cleaned_message = re.sub(r"<@", "<", cleaned_message)
+    cleaned_message = re.sub(r"\n{2,}", "\n", cleaned_message)  # Replace consecutive line breaks with a single line break
     return cleaned_message.strip()
 
 def get_character(character_card):
