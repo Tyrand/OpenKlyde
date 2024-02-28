@@ -1,5 +1,4 @@
 from config import *
-
 import os
 import discord
 import requests
@@ -12,6 +11,9 @@ import random
 import functions
 import datetime
 import time
+import profanity_check
+from profanity_check import predict, predict_prob
+import re
 
 from discord.ext import commands
 from discord import app_commands
@@ -38,13 +40,19 @@ async def bot_behavior(message):
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
+
     if MessageDebug:
         print(message.content)
+    
+    # Check if message content contains a certain racist word (ignoring casing and possible spacing/characters) it also can not be the bot's own message
+    #if message.author != client.user:
+    #    if re.search(r'\b[nN][iI][gG][gG][eE][rR]\b', message.content):
+    #        await message.add_reaction("⚠")
 
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
-            print("Blocked user")
+            print("Denied: Blocked user")
         return False
 
     # Don't respond to yourself or other bots unless specified
@@ -53,7 +61,7 @@ async def bot_behavior(message):
         or message.author.bot and not ReplyToBots
     ):
         if MessageDebug:
-            print("Self or other bot")
+            print("Denied: Self or other bot")
         return False
     
     # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
@@ -65,39 +73,39 @@ async def bot_behavior(message):
             )
         ):
             if MessageDebug:
-                print("Empty message or starts with symbol")
+                print("Denied: Empty message or starts with symbol")
             return False
-    
+
     if message.guild is None:
         if AllowDirectMessages:
             await bot_answer(message)
             return True
         else:
             if MessageDebug:
-                print("Direct messages not allowed")
+                print("Denied: Direct messages not allowed")
             return False
 
     # Check if the bot is in single guild mode - if it is, check if the message is from the correct guild
     if SingleGuildMode and not (message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName):
         if MessageDebug:
-            print("Guild id or name does not match")
+            print("Denied: Guild id or name does not match")
         return False
 
     # Check if the bot is in single channel mode - if it is, check if the message is from the correct channel
     if SingleChannelMode and not (message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName):
         if MessageDebug:
-            print("Channel id or name does not match")
+            print("Denied: Channel id or name does not match")
         return False
 
     # Check if mentions are required to trigger the bot    
     if MentionOrReplyRequired and not (client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user)):
         if MessageDebug:
-            print("Bot was not mentioned or replied to")
+            print("Denied: Bot was not mentioned or replied to")
         return False
 
     # If the message has not yet been returned False, the bot will respond
     if MessageDebug:
-        print("Bot will respond")
+        print("Allowed: Bot will respond")
     await bot_answer(message)
     return True
     
@@ -115,6 +123,11 @@ async def bot_behavior(message):
 
 async def bot_answer(message):
     # React to the message so the user knows we're working on it
+    if DenyProfanity:
+        # Deny the prompt if it doesn't pass the profanity filter
+        if profanity_check.predict([message.content])>ProfanityRating:
+            await message.add_reaction("❌")
+            return False
     await message.add_reaction(ReactionEmoji)
     user = message.author
     userID = message.author.id

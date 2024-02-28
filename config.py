@@ -35,6 +35,8 @@ AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wi
 RenameOldUserHistory = False # set to True to rename old user history files instead of deleting them
 
 BlockedUsers = [] # add user IDs, or names, to this list to block them from using the bot
+DenyProfanity = True # set to True to deny prompts which don't pass the profanity filter
+ProfanityRating = 0.9 # set the minimum rating for a prompt to pass the profanity filter
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
