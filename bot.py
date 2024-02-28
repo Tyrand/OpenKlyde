@@ -43,11 +43,6 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.content)
-    
-    # Check if message content contains a certain racist word (ignoring casing and possible spacing/characters) it also can not be the bot's own message
-    #if message.author != client.user:
-    #    if re.search(r'\b[nN][iI][gG][gG][eE][rR]\b', message.content):
-    #        await message.add_reaction("⚠")
 
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
