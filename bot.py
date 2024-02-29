@@ -49,7 +49,7 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.content)
-    
+
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -76,17 +76,6 @@ async def bot_behavior(message):
             if MessageDebug:
                 print("Denied: Empty message or starts with symbol")
             return False
-        
-    # Check if the user has sent a message within the last 5 seconds
-    if message.author.id in last_message_time:
-        current_time = time.time()
-        last_time = last_message_time[message.author.id]
-        if current_time - last_time < 10:
-            if MessageDebug:
-                print("Denied: Message rate limit exceeded")
-            return False
-    else:
-        last_message_time[message.author.id] = time.time()
 
     if message.guild is None:
         if AllowDirectMessages:
@@ -138,7 +127,17 @@ async def bot_behavior(message):
     # If someone asks for a meme, generate an image of a meme on the fly
     # If playing a game or telling a story, add an image to the story
 
-async def bot_answer(message):
+async def bot_answer(message):    # Check if the user has sent a message within the last 5 seconds
+    if message.author.id in last_message_time:
+        current_time = time.time()
+        last_time = last_message_time[message.author.id]
+        if current_time - last_time < UserRateLimitSeconds:
+            await message.add_reaction("🦥")
+            if MessageDebug:
+                print("Denied: Message rate limit exceeded")
+            return False
+    else:
+        last_message_time[message.author.id] = time.time()
     # React to the message so the user knows we're working on it
     if DenyProfanity:
         # Deny the prompt if it doesn't pass the profanity filter
@@ -170,10 +169,10 @@ async def bot_answer(message):
         if DuckDuckGoSearch:
             DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=4, safesearch='off', region='us-en', backend='lite')
             DDGSearchResultsList = list(DDGSearchResults)
-            print(str(DDGSearchResultsList[0]))
-            print(str(DDGSearchResultsList[1]))
-            print(str(DDGSearchResultsList[2]))
-            print(str(DDGSearchResultsList[3]))
+            print("Result 1" + str(DDGSearchResultsList[0]))
+            print("Result 2" + str(DDGSearchResultsList[1]))
+            print("Result 3" + str(DDGSearchResultsList[2]))
+            print("Result 4" + str(DDGSearchResultsList[3]))
         if UseGuildMemory and message.guild:
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             if GuildMemory is None or GuildMemory == "(None, 0)":

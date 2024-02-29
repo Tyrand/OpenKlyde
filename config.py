@@ -25,6 +25,7 @@ AllowDirectMessages = True # set to True to allow the bot to respond to direct m
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
 AllowBotToMention = False # set to True to allow the bot to mention (ping) users in its responses
+UserRateLimitSeconds = 5 # set to the number of seconds to wait the same user is allowed to submit a prompt
 
 LogAllMessages = False # set to True to log all messages to a file
 AddTimestamp = False # set to True to add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model

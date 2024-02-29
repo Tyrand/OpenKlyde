@@ -235,7 +235,7 @@ async def get_user_history(user, characters):
             contents = file.read()
             print("Accessed:", file_path)
             print(
-                "Total characters:",
+                "Total user_history characters:",
                 len(contents),
                 "Total user_history lines:",
                 contents.count("\n"),
@@ -245,7 +245,7 @@ async def get_user_history(user, characters):
 
             trimmed_contents = contents.strip()
             print(
-                "Trimmed characters:",
+                "Trimmed user_history characters:",
                 len(trimmed_contents),
                 "Trimmed user_history lines:",
                 trimmed_contents.count("\n"),
