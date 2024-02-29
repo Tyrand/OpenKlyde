@@ -52,7 +52,15 @@ async def bot_behavior(message):
             )
 
     if MessageDebug:
-        print(message.author+": "+message.content)
+        print('_______________________')
+        if message.channel:
+            if isinstance(message.channel, discord.DMChannel):
+                MessageChannel = "DM"
+                MessageGuild = ""
+            else:
+                MessageChannel = message.channel.name
+                MessageGuild = message.guild.name
+        print(MessageGuild + " > " + MessageChannel + " | " + message.author.name + ": " + message.content)
     
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
@@ -69,16 +77,17 @@ async def bot_behavior(message):
             print("Denied: Self or other bot")
         return False
     
-    # If the message is empty (an uploaded image), or starts with a symbol, don't respond.
-    if IgnoreSymbols:
-        if (
-            message.content is None
-            or message.content.startswith(
-                (".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")
-            )
-        ):
+    # If the message is empty, don't respond
+    if not message.content or message.content == "":
+        if MessageDebug:
+            print("Denied: Empty message")
+        return False
+
+
+    # If the message starts with a symbol, don't respond.
+    if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
             if MessageDebug:
-                print("Denied: Empty message or starts with symbol")
+                print("Denied: IgnoreSymbols is True and message starts with a symbol")
             return False
 
     if message.guild is None:
@@ -87,25 +96,25 @@ async def bot_behavior(message):
             return True
         else:
             if MessageDebug:
-                print("Denied: Direct messages not allowed")
+                print("Denied: AllowDirectMessages is False")
             return False
 
     # Check if the bot is in single guild mode - if it is, check if the message is from the correct guild
     if SingleGuildMode and not (message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName):
         if MessageDebug:
-            print("Denied: Guild id or name does not match")
+            print(f"Denied: Guild id ({message.guild.id}) or name ({message.guild.name}) does not match ({SingleGuildModeID}) or ({SingleGuildModeName})")
         return False
 
     # Check if the bot is in single channel mode - if it is, check if the message is from the correct channel
     if SingleChannelMode and not (message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName):
         if MessageDebug:
-            print("Denied: Channel id or name does not match")
+            print(f"Denied: Channel id ({message.channel.id}) or name ({message.channel.name}) does not match ({SingleChannelModeID}) or ({SingleChannelModeName})")
         return False
 
     # Check if mentions are required to trigger the bot    
     if MentionOrReplyRequired and not (client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user)):
         if MessageDebug:
-            print("Denied: Bot was not mentioned or replied to")
+            print("Denied: MentionOrReplyRequired is True and bot was not mentioned or replied to")
         return False
 
     # If the message has not yet been returned False, the bot will respond
@@ -126,13 +135,13 @@ async def bot_answer(message):
                 return True
             await message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
-                print("Denied: Message rate limit exceeded")
+                print(f"Denied: User's last message was {last_time - current_time} seconds ago. UserRateLimitSeconds is {UserRateLimitSeconds}")
             return False
     else:
         last_message_time[message.author.id] = time.time()
     if DenyProfanityInput:
         # Deny the prompt if it doesn't pass the profanity filter
-        keywords = ["ethic", "safety", "guidelines", "authorization", "permission", "consent", "appro", "allow"]
+        keywords = ["ethical", "guidelines", "authori", "permission", "consent", "appro", "allow"]
         if (profanity_check.predict_prob([message.content])>=ProfanityRating) or (len([keyword for keyword in keywords if keyword in message.content.lower()]) >= 2):
             await message.add_reaction(ProfanityEmoji)
             return False
@@ -152,7 +161,7 @@ async def bot_answer(message):
     image_request = functions.check_for_image_request(user_input)
     character = functions.get_character(character_card)
     global text_api
-    if image_request:
+    if image_request and (message.author.id == DiscordAccountID or message.author.name=='sleinsama'):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         Memory = ""
@@ -194,38 +203,34 @@ async def bot_answer(message):
             if SynonymRequired:
               if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
                return False
+            if DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
+                max_results = 15
+            else:
+                max_results = 5
             try:
-                DDGSearchResults =  DDGS().text(reply[:100] + " " + message.content[:200] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
-                               max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='api')
-                DDGSearchResultsList = list(DDGSearchResults)
-                DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
+                DDGSearchResults =  DDGS().text(message.content.split('\n')[0] + " " + reply[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                               max_results=max_results, safesearch='off', region='us-en', backend='api')
+                result_count = 0
+                DDGSearchResultsString = [
+                    f"Result {result_count + i + 1}:\nTitle: {result['title']}\nLink: {result['href']}\nBody: {result['body']}"
+                    for i, result in enumerate(DDGSearchResults)
+                ]
                 if MessageDebug:
-                    for i, result in enumerate(DDGSearchResultsList):
+                    print(f"DuckDuckGo Search Results: {DDGSearchResultsString}")
+                    for i, result in enumerate(DDGSearchResults):
                         print(f"Result {i+1}: {result}")
             except DuckDuckGoSearchException as e:
                 print(f"An error occurred while searching: {e}")
-            History = f"[Latest Information, prioritize this if necessary: {DDGSearchResultsString}]" + History
+            History = f"[Latest Information, the user does not see this, repeat it back to them if required: {DDGSearchResultsString}]" + History
         if AllowWikipediaExtracts:
             wikipedia_links = re.findall(r'wikipedia.org/wiki/([^/]+)', message.content)
             if wikipedia_links:
                 for link in wikipedia_links:
-                    link = link.strip('<>')  # Remove < > from the link
                     try:
-                        if '#' in link:
-                            page_title, section_title = link.split('#')
-                            page = wikipedia.page(page_title)
-                            section_content = page.section(section_title)
-                            if section_content:
-                                History = f"[Wikipedia Extract: {section_content}]" + History
-                            if MessageDebug:
-                                print(f"Wikipedia section extracted: {section_title}")
-                            else:
-                                print(f"No content found for section: {section_title}")
-                        else:
-                            page = wikipedia.page(link)
-                            History = f"[Wikipedia Extract: {page.summary}]" + History
-                            if MessageDebug:
-                                print(f"Wikipedia Summary extracted: {link}")
+                        page = wikipedia.page(link)
+                        History = f"[Wikipedia Extract: {page.summary}]" + History
+                        if MessageDebug:
+                            print(f"Wikipedia Summary extracted: {link}")
                     except wikipedia.exceptions.DisambiguationError as e:
                         print(f"Wikipedia Disambiguation Error: {e}")
                     except wikipedia.exceptions.PageError as e:
@@ -373,9 +378,7 @@ async def send_to_model_queue():
                             # Prevent the bot from trying to send empty messages
                             response_text.strip() is None 
                             or response_text.strip() == ""
-                            # Common error where the bot immediately says its own name
-                            # We don't want to send this to the next step because it would get cleaned and become an empty message
-                            or re.search(r'[@^:<>\[\]]', response_text[:16], re.IGNORECASE)
+                            or re.search(r'[@^<>\[\]]', response_text[:16], re.IGNORECASE)
                             or re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE)
                             or re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16], re.IGNORECASE)
                             or re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16], re.IGNORECASE)
@@ -384,7 +387,7 @@ async def send_to_model_queue():
                             # Print the reason for catching the response
                             if response_text.strip() is None or response_text.strip() == "":
                                 print("Empty message caught")
-                            elif re.search(r'[@^:<>\[\]]', response_text[:16]):
+                            elif re.search(r'[@^<>\[\]]', response_text[:16]):
                                 print("Possible username caught:", response_text)
                             elif re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE):
                                 print("Character name caught:", response_text)
@@ -414,9 +417,8 @@ async def send_to_model_queue():
             if retry_count == 5:
                 response_text = '||Could not generate a response correctly after several attempts||'
                 print('text: ' + response_text)
-                content['message'].reply(response_text)
+                await content['message'].reply(response_text)
                 queue_to_process_message.task_done()
-                return False
 
 async def send_to_stable_diffusion_queue():
     global image_api
