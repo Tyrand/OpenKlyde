@@ -6,7 +6,7 @@ ReactionEmoji = "⏲" # This is the emoji that the bot will react with when it i
 PromptDebug = False # Set to True to print prompt debug information to the console
 MessageDebug = False # Set to True to print out how every message is processed
 
-# Memory Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
+# Context Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
 UseUserHistory = True # Set to True to enable user history
 UserHistoryAmount = 6000
 
@@ -14,6 +14,7 @@ UseChannelHistory = False # Set to True to enable channel history (Multi-user mo
 ChannelHistoryAmount = 6000
 ChannelHistoryOverride = "" # Set to the desired channel name to use for ChannelHistory if not using the same channel as the message
 
+# Memory Configuration - This is currently only manually set by you - it is used to provide permanent memory to the bot for a user, guild, or channel
 UserMemoryAmount = 3000
 UseUserMemory = True # Set to False to disable user memory
 
@@ -46,7 +47,8 @@ ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a p
 
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
 DuckDuckGoMaxSearchResults = 5 # set to the maximum number of search results to fetch from DuckDuckGo
-SynonymRequired = False # set to True to require a synonym to be used in the prompt in order for a search to be performed
+AllowWikipediaExtracts = True # set to True to allow the bot to fetch summaries from Wikipedia articles
+SynonymRequired = True # set to True to require a synonym to be used in the prompt in order for a search to be performed (search / lookup / find / etc.)
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
@@ -57,6 +59,5 @@ SingleGuildModeID = "" # set to the desired channel ID if SingleGuildMode is Tru
 SingleGuildModeName = "" # set to the desired channel name if SingleGuildMode is True
 
 # Not yet implemented
-#AllowWikipedia = False # set to True to allow the bot to fetch summaries from Wikipedia articles
 #KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size
 #LogFileLimit = 100 # set to the maximum number of lines to keep in a log file

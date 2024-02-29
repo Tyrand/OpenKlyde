@@ -8,7 +8,6 @@ from PIL import Image
 from io import BytesIO
 import datetime
 from datetime import datetime
-import wikipedia
 from config import *
 
 async def set_api(config_file):

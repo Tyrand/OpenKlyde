@@ -13,6 +13,7 @@ import os
 import profanity_check
 import random
 import requests
+import wikipedia
 from bs4 import BeautifulSoup
 import re
 from aiohttp import ClientSession
@@ -131,7 +132,8 @@ async def bot_answer(message):
         last_message_time[message.author.id] = time.time()
     if DenyProfanityInput:
         # Deny the prompt if it doesn't pass the profanity filter
-        if profanity_check.predict_prob([message.content])>=ProfanityRating:
+        keywords = ["ethic", "safety", "guidelines", "authorization", "permission", "consent", "appro", "allow"]
+        if (profanity_check.predict_prob([message.content])>=ProfanityRating) or (len([keyword for keyword in keywords if keyword in message.content.lower()]) >= 2):
             await message.add_reaction(ProfanityEmoji)
             return False
     await message.add_reaction(ReactionEmoji)
@@ -202,8 +204,33 @@ async def bot_answer(message):
                         print(f"Result {i+1}: {result}")
             except DuckDuckGoSearchException as e:
                 print(f"An error occurred while searching: {e}")
-            History = f"[Latest Information: {DDGSearchResultsString}]" + History
-        History = f"[Current UTC date and time: " + datetime.datetime.now().strftime('%Y-%m-%d %H-%M')+"]" + History
+            History = f"[Latest Information, prioritize this if necessary: {DDGSearchResultsString}]" + History
+        if AllowWikipediaExtracts:
+            wikipedia_links = re.findall(r'wikipedia.org/wiki/([^/]+)', message.content)
+            if wikipedia_links:
+                for link in wikipedia_links:
+                    link = link.strip('<>')  # Remove < > from the link
+                    try:
+                        if '#' in link:
+                            page_title, section_title = link.split('#')
+                            page = wikipedia.page(page_title)
+                            section_content = page.section(section_title)
+                            if section_content:
+                                History = f"[Wikipedia Extract: {section_content}]" + History
+                            if MessageDebug:
+                                print(f"Wikipedia section extracted: {section_title}")
+                            else:
+                                print(f"No content found for section: {section_title}")
+                        else:
+                            page = wikipedia.page(link)
+                            History = f"[Wikipedia Extract: {page.summary}]" + History
+                            if MessageDebug:
+                                print(f"Wikipedia Summary extracted: {link}")
+                    except wikipedia.exceptions.DisambiguationError as e:
+                        print(f"Wikipedia Disambiguation Error: {e}")
+                    except wikipedia.exceptions.PageError as e:
+                        print(f"Wikipedia Page Error: {e}")
+        History = f"[You must speak as if it is the UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
             user,
@@ -358,7 +385,7 @@ async def send_to_model_queue():
                             if response_text.strip() is None or response_text.strip() == "":
                                 print("Empty message caught")
                             elif re.search(r'[@^:<>\[\]]', response_text[:16]):
-                                print("Bot name caught:", response_text)
+                                print("Possible username caught:", response_text)
                             elif re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE):
                                 print("Character name caught:", response_text)
                             elif re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16], re.IGNORECASE):
@@ -386,9 +413,10 @@ async def send_to_model_queue():
                 retry_count += 1
             if retry_count == 5:
                 response_text = '||Could not generate a response correctly after several attempts||'
-                print('results: '+[{'text': response_text}])
-                await handle_llm_response(content, response_text)
+                print('text: ' + response_text)
+                content['message'].reply(response_text)
                 queue_to_process_message.task_done()
+                return False
 
 async def send_to_stable_diffusion_queue():
     global image_api
@@ -448,7 +476,6 @@ async def send_to_user_queue():
         else:
             await send_large_message(reply["content"]["message"], reply["response"])
         # Update reactions after message has been sent
-        await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
@@ -457,6 +484,7 @@ async def send_to_user_queue():
             reply["content"]["user"],
         )
         queue_to_send_message.task_done()
+        await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
 
 @client.event
 async def on_ready():
