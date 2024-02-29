@@ -195,7 +195,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
                 History = ""
         if DuckDuckGoSearch:
             try:
-                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='lite')
+                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), max_results=DuckDuckGoMaxSearchResults, timelimit='y', safesearch='off', region='us-en', backend='lite')
                 DDGSearchResultsList = list(DDGSearchResults)
             except DuckDuckGoSearchException as e:
                 print(f"An error occurred while searching: {e}")
