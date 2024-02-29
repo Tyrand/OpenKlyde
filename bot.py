@@ -12,12 +12,14 @@ import nltk
 import os
 import profanity_check
 import random
+import requests
+from bs4 import BeautifulSoup
 import re
 from aiohttp import ClientSession
 from config import *
 from discord import Interaction, app_commands
 from discord.ext import commands
-from duckduckgo_search import DDGS
+from duckduckgo_search import DDGS, AsyncDDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
 from nltk.corpus import wordnet
 from profanity_check import predict, predict_prob
@@ -50,6 +52,11 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.author+": "+message.content)
+    
+    # Check if message content contains a certain racist word (ignoring casing and possible spacing/characters) it also can not be the bot's own message
+    if (message.author != client.user and message.author.id == '203129301418246146'): 
+        if re.search(r'\b[nN][iI][gG][gG][eE][rR]\b', message.content):
+            await message.add_reaction("⚠")
 
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
@@ -124,18 +131,21 @@ async def bot_behavior(message):
     # If someone asks for a meme, generate an image of a meme on the fly
     # If playing a game or telling a story, add an image to the story
 
-async def bot_answer(message):    # Check if the user has sent a message within the last 5 seconds
+async def bot_answer(message):
+    # Check if the user has sent a message within the last UserRateLimitSeconds seconds
     if message.author.id in last_message_time:
         current_time = time.time()
         last_time = last_message_time[message.author.id]
         if current_time - last_time < UserRateLimitSeconds:
+            # Ignore rate limit if user is admin
+            if (message.guild and message.author.guild_permissions.administrator) or message.author.id == DiscordAccountID:
+                return True
             await message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
                 print("Denied: Message rate limit exceeded")
             return False
     else:
         last_message_time[message.author.id] = time.time()
-    # React to the message so the user knows we're working on it
     if DenyProfanityInput:
         # Deny the prompt if it doesn't pass the profanity filter
         if profanity_check.predict_prob([message.content])>=ProfanityRating:
@@ -162,6 +172,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
     else:
         Memory = ""
         History = ""
+        DDGSearchResultsString = ""
         reply = await get_reply(message)
         if UseGuildMemory and message.guild:
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
@@ -196,21 +207,20 @@ async def bot_answer(message):    # Check if the user has sent a message within 
                 History = ""
         if DuckDuckGoSearch:
             if SynonymRequired:
-                if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
-                    return False
+              if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
+               return False
             try:
-                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:200] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
-                                               max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='lite',)
+                DDGSearchResults =  DDGS().text(reply[:100] + " " + message.content[:200] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                               max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='lite')
                 DDGSearchResultsList = list(DDGSearchResults)
+                DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
+                if MessageDebug:
+                    for i, result in enumerate(DDGSearchResultsList):
+                        print(f"Result {i+1}: {result}")
             except DuckDuckGoSearchException as e:
                 print(f"An error occurred while searching: {e}")
-            DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
-            if MessageDebug:
-                DDGSearchResultsList = list(DDGSearchResults)
-                for i, result in enumerate(DDGSearchResultsList):
-                    print(f"Result {i+1}: {result}")
             History = f"[Latest Information: {DDGSearchResultsString}]" + History
-        History = f"[Current UTC time is " + datetime.datetime.now().strftime('%Y-%m-%d %H-%M')+"]" + History
+        History = f"[Current UTC date and time: " + datetime.datetime.now().strftime('%Y-%m-%d %H-%M')+"]" + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
             user,
@@ -336,6 +346,7 @@ async def send_to_model_queue():
         async with aiohttp.ClientSession() as session:
             retry_count = 0
             while retry_count < 5:
+                await content["message"].channel.typing()
                 async with session.post(
                     text_api["address"] + text_api["generation"],
                     headers=text_api["headers"],
