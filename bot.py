@@ -10,6 +10,7 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 import duckduckgo_search
 from duckduckgo_search import DDGS
+from duckduckgo_search.exceptions import DuckDuckGoSearchException
 import functions
 import httpx
 import importlib
@@ -109,7 +110,7 @@ async def bot_behavior(message):
 
     await bot_answer(message)
     return True
-    
+
     # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
     # If someone speaks in a channel, there will be a three percent chance of answering (only in chatbots and furbies)
     # If I'm bored, ping someone with a message history
@@ -161,14 +162,6 @@ async def bot_answer(message):    # Check if the user has sent a message within 
         Memory = ""
         History = ""
         reply = await get_reply(message)
-        if DuckDuckGoSearch:
-            DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=DuckDuckGoMaxResults, safesearch='off', region='us-en', backend='lite')
-            DDGSearchResultsList = list(DDGSearchResults)
-            DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
-            if MessageDebug:
-                DDGSearchResultsList = list(DDGSearchResults)
-                for i, result in enumerate(DDGSearchResultsList[:4]):
-                    print(f"Result {i+1}: {result}")
         if UseGuildMemory and message.guild:
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             if GuildMemory is None or GuildMemory == "(None, 0)":
@@ -201,6 +194,16 @@ async def bot_answer(message):    # Check if the user has sent a message within 
             if History is None or History == "(None, 0)":
                 History = ""
         if DuckDuckGoSearch:
+            try:
+                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='lite')
+                DDGSearchResultsList = list(DDGSearchResults)
+            except DuckDuckGoSearchException as e:
+                print(f"An error occurred while searching: {e}")
+            DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
+            if MessageDebug:
+                DDGSearchResultsList = list(DDGSearchResults)
+                for i, result in enumerate(DDGSearchResultsList):
+                    print(f"Result {i+1}: {result}")
             History = f"[Latest Information: {DDGSearchResultsString}]" + History
         History = f"[Current UTC time is " + datetime.datetime.now().strftime('%Y-%m-%d %H-%M')+"]" + History
         prompt = await functions.create_text_prompt(
