@@ -25,7 +25,7 @@ Download Automatic1111 here:
 To run this bot:
 
 1. Load the LLM model of your choice in Koboldcpp
-2. Download this repository [OpenKlyde](https://github.com/badgids/OpenKlyde)
+2. Download this repository [OpenKlyde](https://github.com/Tyrand/OpenKlyde)
 3. Open bot.py and at replace API_KEY with your bot's API key
 4. Install the requirements. I suggest using an Anaconda or Miniconda instance.
     ```pip install -r requirements.txt```
