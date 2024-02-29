@@ -27,7 +27,7 @@ AllowDirectMessages = True # set to True to allow the bot to respond to direct m
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
 AllowBotToMention = False # set to True to allow the bot to mention (ping) users in its responses
-UserRateLimitSeconds = 5 # set to the number of seconds to wait the same user is allowed to submit a prompt
+UserRateLimitSeconds = 10 # set to the number of seconds to wait the same user is allowed to submit a prompt
 RateLimitedEmoji = "⏳" # set to the emoji that the bot will react with when a user is rate limited
 
 LogAllMessages = False # set to True to log all messages to a file
@@ -45,7 +45,7 @@ ProfanityRating = 1 # set the minimum rating for a prompt to pass the profanity 
 ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a prompt is denied for profanity
 
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
-DuckDuckGoMaxResults = 10 # set to the maximum number of search results to fetch from DuckDuckGo
+DuckDuckGoMaxSearchResults = 5 # set to the maximum number of search results to fetch from DuckDuckGo
 SynonymRequired = False # set to True to require a synonym to be used in the prompt in order for a search to be performed
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel

@@ -53,11 +53,6 @@ async def bot_behavior(message):
     if MessageDebug:
         print(message.author+": "+message.content)
     
-    # Check if message content contains a certain racist word (ignoring casing and possible spacing/characters) it also can not be the bot's own message
-    if (message.author != client.user and message.author.id == '203129301418246146'): 
-        if re.search(r'\b[nN][iI][gG][gG][eE][rR]\b', message.content):
-            await message.add_reaction("⚠")
-
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -118,18 +113,6 @@ async def bot_behavior(message):
 
     await bot_answer(message)
     return True
-
-    # If I haven't spoken for 30 minutes, say something in the last channel where I was pinged (not DMs) with a pun or generated image
-    # If someone speaks in a channel, there will be a three percent chance of answering (only in chatbots and furbies)
-    # If I'm bored, ping someone with a message history
-    # If I have a reminder, pop off the reminder in DMs at selected time and date
-    # If someone asks me about the weather, look up weather at a given zip code/location
-    # If someone asks me about a wikipedia article, provide the first 300 words from the article's page
-    # Google wikipedia and add info to context before answering
-    # If someone asks for a random number, roll some dice
-    # If someone wants me to be chatty, change personality on the fly to chatterbox
-    # If someone asks for a meme, generate an image of a meme on the fly
-    # If playing a game or telling a story, add an image to the story
 
 async def bot_answer(message):
     # Check if the user has sent a message within the last UserRateLimitSeconds seconds
@@ -211,7 +194,7 @@ async def bot_answer(message):
                return False
             try:
                 DDGSearchResults =  DDGS().text(reply[:100] + " " + message.content[:200] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
-                               max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='lite')
+                               max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='api')
                 DDGSearchResultsList = list(DDGSearchResults)
                 DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
                 if MessageDebug:
