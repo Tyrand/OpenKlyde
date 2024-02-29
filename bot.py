@@ -1,26 +1,27 @@
-
 import aiohttp
-from aiohttp import ClientSession
 import asyncio
-import datetime
 import config
-from config import *
+import datetime
 import discord
-from discord import Interaction, app_commands
-from discord.ext import commands
 import duckduckgo_search
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import DuckDuckGoSearchException
 import functions
 import httpx
 import importlib
 import json
+import nltk
 import os
-import time
 import profanity_check
-from profanity_check import predict, predict_prob
 import random
 import re
+from aiohttp import ClientSession
+from config import *
+from discord import Interaction, app_commands
+from discord.ext import commands
+from duckduckgo_search import DDGS
+from duckduckgo_search.exceptions import DuckDuckGoSearchException
+from nltk.corpus import wordnet
+from profanity_check import predict, predict_prob
+import time
 
 
 intents = discord.Intents.all()
@@ -49,7 +50,7 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.author+": "+message.content)
-    
+
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -194,8 +195,12 @@ async def bot_answer(message):    # Check if the user has sent a message within 
             if History is None or History == "(None, 0)":
                 History = ""
         if DuckDuckGoSearch:
+            if SynonymRequired:
+                if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
+                    return False
             try:
-                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), max_results=DuckDuckGoMaxSearchResults, timelimit='y', safesearch='off', region='us-en', backend='lite')
+                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                                               max_results=DuckDuckGoMaxSearchResults, timelimit='y', safesearch='off', region='us-en', backend='lite')
                 DDGSearchResultsList = list(DDGSearchResults)
             except DuckDuckGoSearchException as e:
                 print(f"An error occurred while searching: {e}")
@@ -731,5 +736,6 @@ try:
     client.run(discord_api_key)
 except Exception as e:
     client.close()
+    asyncio.sleep(10)  # Add a 10 second delay
     client.run(discord_api_key)
     print("Bot restarted successfully.")

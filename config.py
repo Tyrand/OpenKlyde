@@ -43,6 +43,7 @@ ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a p
 
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
 DuckDuckGoMaxResults = 10 # set to the maximum number of search results to fetch from DuckDuckGo
+SynonymRequired = False # set to True to require a synonym to be used in the prompt in order for a search to be performed
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
