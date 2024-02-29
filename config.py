@@ -40,7 +40,9 @@ BlockedUsers = [] # add user IDs, or names, to this list to block them from usin
 DenyProfanity = True # set to True to deny prompts which don't pass the profanity filter
 ProfanityRating = 1 # set the minimum rating for a prompt to pass the profanity filter
 ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a prompt is denied for profanity
+
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
+DuckDuckGoMaxResults = 3 # set to the maximum number of search results to fetch from DuckDuckGo
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True

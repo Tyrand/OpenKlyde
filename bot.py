@@ -47,8 +47,8 @@ async def bot_behavior(message):
             )
 
     if MessageDebug:
-        print(message.content)
-    
+        print(message.author+": "+message.content)
+
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -106,6 +106,7 @@ async def bot_behavior(message):
     # If the message has not yet been returned False, the bot will respond
     if MessageDebug:
         print("Allowed: Bot will respond")
+
     await bot_answer(message)
     return True
     
@@ -161,12 +162,13 @@ async def bot_answer(message):    # Check if the user has sent a message within 
         History = ""
         reply = await get_reply(message)
         if DuckDuckGoSearch:
-            DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=4, safesearch='off', region='us-en', backend='lite')
+            DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=DuckDuckGoMaxResults, safesearch='off', region='us-en', backend='lite')
             DDGSearchResultsList = list(DDGSearchResults)
-            print("Result 1" + str(DDGSearchResultsList[0]))
-            print("Result 2" + str(DDGSearchResultsList[1]))
-            print("Result 3" + str(DDGSearchResultsList[2]))
-            print("Result 4" + str(DDGSearchResultsList[3]))
+            DDGSearchResultsString = "\n".join(str(result) for result in DDGSearchResultsList)
+            if MessageDebug:
+                DDGSearchResultsList = list(DDGSearchResults)
+                for i, result in enumerate(DDGSearchResultsList[:4]):
+                    print(f"Result {i+1}: {result}")
         if UseGuildMemory and message.guild:
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             if GuildMemory is None or GuildMemory == "(None, 0)":
@@ -199,7 +201,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
             if History is None or History == "(None, 0)":
                 History = ""
         if DuckDuckGoSearch:
-            History = f"[Latest Information: ("+str(DDGSearchResultsList[0])+")"+"("+str(DDGSearchResultsList[1])+")"+"("+str(DDGSearchResultsList[2])+")"+"]" + History
+            History = f"[Latest Information: {DDGSearchResultsString}]" + History
         History = f"[Current UTC time is " + datetime.datetime.now().strftime('%Y-%m-%d %H-%M')+"]" + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
