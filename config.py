@@ -37,7 +37,8 @@ RenameOldUserHistory = False # set to True to rename old user history files inst
 BadResponseSafeGuards = True # set to True to enable safe guards to prevent the bot from sending bad responses, like mimicing users.
 
 BlockedUsers = [] # add user IDs, or names, to this list to block them from using the bot
-DenyProfanity = True # set to True to deny prompts which don't pass the profanity filter
+DenyProfanityInput = True # set to True to deny incoming prompts which don't pass the profanity filter
+DenyProfanityOutput = True # set to True to deny outgoing responses which don't pass the profanity filter
 ProfanityRating = 1 # set the minimum rating for a prompt to pass the profanity filter
 ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a prompt is denied for profanity
 

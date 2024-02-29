@@ -136,7 +136,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
     else:
         last_message_time[message.author.id] = time.time()
     # React to the message so the user knows we're working on it
-    if DenyProfanity:
+    if DenyProfanityInput:
         # Deny the prompt if it doesn't pass the profanity filter
         if profanity_check.predict_prob([message.content])>=ProfanityRating:
             await message.add_reaction(ProfanityEmoji)
@@ -199,8 +199,8 @@ async def bot_answer(message):    # Check if the user has sent a message within 
                 if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
                     return False
             try:
-                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
-                                               max_results=DuckDuckGoMaxSearchResults, timelimit='y', safesearch='off', region='us-en', backend='lite')
+                DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:200] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                                               max_results=DuckDuckGoMaxSearchResults, safesearch='off', region='us-en', backend='lite',)
                 DDGSearchResultsList = list(DDGSearchResults)
             except DuckDuckGoSearchException as e:
                 print(f"An error occurred while searching: {e}")
@@ -377,7 +377,7 @@ async def send_to_model_queue():
                                 print(retry_count)
                             retry_count += 1
                             continue
-                        if DenyProfanity and profanity_check.predict([response_text])[0] >= ProfanityRating:
+                        if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
                             # Retry by continuing the loop
                             retry_count += 1
                             continue
