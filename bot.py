@@ -49,7 +49,7 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.author+": "+message.content)
-
+    
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -137,7 +137,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
     # React to the message so the user knows we're working on it
     if DenyProfanity:
         # Deny the prompt if it doesn't pass the profanity filter
-        if profanity_check.predict([message.content])>=ProfanityRating:
+        if profanity_check.predict_prob([message.content])>=ProfanityRating:
             await message.add_reaction(ProfanityEmoji)
             return False
     await message.add_reaction(ReactionEmoji)
