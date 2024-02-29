@@ -1,23 +1,26 @@
-from config import *
-import os
-import discord
-import requests
-import json
-import asyncio
-import httpx
+
 import aiohttp
 from aiohttp import ClientSession
-import random
-import functions
+import asyncio
 import datetime
+import config
+from config import *
+import discord
+from discord import Interaction, app_commands
+from discord.ext import commands
+import duckduckgo_search
+from duckduckgo_search import DDGS
+import functions
+import httpx
+import importlib
+import json
+import os
 import time
 import profanity_check
 from profanity_check import predict, predict_prob
+import random
 import re
 
-from discord.ext import commands
-from discord import app_commands
-from discord import Interaction
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix="$", intents=intents)
@@ -33,6 +36,9 @@ text_api = {}
 image_api = {}
 status_last_update = None
 
+# Dictionary to keep track of the last message time for each user
+last_message_time = {}
+
 async def bot_behavior(message):
     if LogAllMessages:
         # log all messages into separate channel files
@@ -43,7 +49,7 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.content)
- 
+    
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -70,6 +76,17 @@ async def bot_behavior(message):
             if MessageDebug:
                 print("Denied: Empty message or starts with symbol")
             return False
+        
+    # Check if the user has sent a message within the last 5 seconds
+    if message.author.id in last_message_time:
+        current_time = time.time()
+        last_time = last_message_time[message.author.id]
+        if current_time - last_time < 10:
+            if MessageDebug:
+                print("Denied: Message rate limit exceeded")
+            return False
+    else:
+        last_message_time[message.author.id] = time.time()
 
     if message.guild is None:
         if AllowDirectMessages:
@@ -97,6 +114,11 @@ async def bot_behavior(message):
         if MessageDebug:
             print("Denied: Bot was not mentioned or replied to")
         return False
+
+
+
+    # Update the last message time for the user
+    last_message_time[message.author.id] = time.time()
 
     # If the message has not yet been returned False, the bot will respond
     if MessageDebug:
@@ -143,11 +165,15 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         Memory = ""
+        History = ""
         reply = await get_reply(message)
-        if UseUserMemory:
-            Memory = str(await functions.get_user_memory(user, UserMemoryAmount))
-            if Memory is None or Memory == "(None, 0)":
-                Memory = ""
+        if DuckDuckGoSearch:
+            DDGSearchResults = DDGS().text(reply[:100] + " " + message.content[:100], max_results=4, safesearch='off', region='us-en', backend='lite')
+            DDGSearchResultsList = list(DDGSearchResults)
+            print(str(DDGSearchResultsList[0]))
+            print(str(DDGSearchResultsList[1]))
+            print(str(DDGSearchResultsList[2]))
+            print(str(DDGSearchResultsList[3]))
         if UseGuildMemory and message.guild:
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             if GuildMemory is None or GuildMemory == "(None, 0)":
@@ -162,10 +188,10 @@ async def bot_answer(message):
             if ChannelMemory is None or ChannelMemory == "(None, 0)":
                 ChannelMemory = ""
             Memory = ChannelMemory + Memory
-        if UseUserHistory:
-            History = str(await functions.get_user_history(user, UserHistoryAmount))
-            if History is None or History == "(None, 0)":
-                History = ""
+        if UseUserMemory:
+            Memory = str(await functions.get_user_memory(user, UserMemoryAmount))
+            if Memory is None or Memory == "(None, 0)":
+                Memory = ""
         if UseChannelHistory and message.guild:
             if ChannelHistoryOverride:
                 ChannelName = ChannelHistoryOverride
@@ -175,6 +201,12 @@ async def bot_answer(message):
             if ChannelHistory is None or ChannelHistory == "(None, 0)":
                 ChannelHistory = ""
             History = f"[Chat log for channel '{message.channel.name}' begins] " + ChannelHistory + f" [Chat log for channel '{message.channel.name}' ends]" + History
+        if UseUserHistory:
+            History = str(await functions.get_user_history(user, UserHistoryAmount))
+            if History is None or History == "(None, 0)":
+                History = ""
+        if DuckDuckGoSearch:
+            History = f"[Latest Information: ("+str(DDGSearchResultsList[0])+")"+"("+str(DDGSearchResultsList[1])+")"+"("+str(DDGSearchResultsList[2])+")"+"]" + History
         History = f"[Current UTC time is " + datetime.datetime.now().strftime('%Y-%m-%d %H-%M')+"]" + History
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
