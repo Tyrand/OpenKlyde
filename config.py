@@ -26,6 +26,7 @@ ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
 AllowBotToMention = False # set to True to allow the bot to mention (ping) users in its responses
 UserRateLimitSeconds = 5 # set to the number of seconds to wait the same user is allowed to submit a prompt
+RateLimitedEmoji = "✋" # set to the emoji that the bot will react with when a user is rate limited
 
 LogAllMessages = False # set to True to log all messages to a file
 AddTimestamp = False # set to True to add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model
@@ -38,6 +39,7 @@ BadResponseSafeGuards = True # set to True to enable safe guards to prevent the 
 BlockedUsers = [] # add user IDs, or names, to this list to block them from using the bot
 DenyProfanity = True # set to True to deny prompts which don't pass the profanity filter
 ProfanityRating = 1 # set the minimum rating for a prompt to pass the profanity filter
+ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a prompt is denied for profanity
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel

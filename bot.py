@@ -35,7 +35,6 @@ character_card = {}
 text_api = {}
 image_api = {}
 status_last_update = None
-
 # Dictionary to keep track of the last message time for each user
 last_message_time = {}
 
@@ -49,7 +48,7 @@ async def bot_behavior(message):
 
     if MessageDebug:
         print(message.content)
-
+    
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
@@ -104,11 +103,6 @@ async def bot_behavior(message):
             print("Denied: Bot was not mentioned or replied to")
         return False
 
-
-
-    # Update the last message time for the user
-    last_message_time[message.author.id] = time.time()
-
     # If the message has not yet been returned False, the bot will respond
     if MessageDebug:
         print("Allowed: Bot will respond")
@@ -132,7 +126,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
         current_time = time.time()
         last_time = last_message_time[message.author.id]
         if current_time - last_time < UserRateLimitSeconds:
-            await message.add_reaction("🦥")
+            await message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
                 print("Denied: Message rate limit exceeded")
             return False
@@ -142,7 +136,7 @@ async def bot_answer(message):    # Check if the user has sent a message within 
     if DenyProfanity:
         # Deny the prompt if it doesn't pass the profanity filter
         if profanity_check.predict([message.content])>=ProfanityRating:
-            await message.add_reaction("❌")
+            await message.add_reaction(ProfanityEmoji)
             return False
     await message.add_reaction(ReactionEmoji)
     user = message.author
