@@ -1,3 +1,4 @@
+
 import aiohttp
 import asyncio
 import config
@@ -167,81 +168,77 @@ async def bot_answer(message):
         History = ""
         DDGSearchResultsString = ""
         reply = await get_reply(message)
-        if UseGuildMemory and message.guild:
-            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
-            if GuildMemory is None or GuildMemory == "(None, 0)":
-                GuildMemory = ""
-            Memory = GuildMemory + Memory
+        if UseUserMemory:
+            UserMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
+            Memory = UserMemory + Memory
         if UseChannelMemory and message.guild:
             if ChannelHistoryOverride:
                 ChannelName = ChannelHistoryOverride
             else:
                 ChannelName = message.channel.name
             ChannelMemory = str(await functions.get_channel_memory(message.guild.name, ChannelName, ChannelMemoryAmount))
-            if ChannelMemory is None or ChannelMemory == "(None, 0)":
-                ChannelMemory = ""
             Memory = ChannelMemory + Memory
-        if UseUserMemory:
-            Memory = str(await functions.get_user_memory(user, UserMemoryAmount))
-            if Memory is None or Memory == "(None, 0)":
-                Memory = ""
+        if UseGuildMemory and message.guild:
+            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
+            Memory =  GuildMemory + Memory
+        if UseUserHistory:
+            UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
+            History = UserHistory + History
         if UseChannelHistory and message.guild:
             if ChannelHistoryOverride:
                 ChannelName = ChannelHistoryOverride
             else:
                 ChannelName = message.channel.name
             ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
-            if ChannelHistory is None or ChannelHistory == "(None, 0)":
-                ChannelHistory = ""
             History = f"[Chat log for channel '{message.channel.name}' begins] " + ChannelHistory + f" [Chat log for channel '{message.channel.name}' ends]" + History
-        if UseUserHistory:
-            History = str(await functions.get_user_history(user, UserHistoryAmount))
-            if History is None or History == "(None, 0)":
-                History = ""
         if DuckDuckGoSearch:
-            if SynonymRequired:
-                for word in nltk.word_tokenize(message.content[:20]):
-                    synsets = wordnet.synsets(word)
-                    if any(w.lemmas()[0].name() for w in synsets if w.lemmas()[0].name() in ["search", "who", "what", "why", "when", "where"]):
-                        break
-                else:
-                    max_results = 0
-            elif DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
-                max_results = DuckDuckGoMaxSearchResultsWithParams
-            elif message.content.startswith("!"):
-                max_results = 0
-            else:
+            max_results = 0
+            if not TriggerWordRequiredForSearch:
                 max_results = DuckDuckGoMaxSearchResults
+            elif TriggerWordRequiredForSearch:
+                    if any(word in message.content.lower() for word in ["who", "what", "why", "when", "where", "search"]):
+                        if MessageDebug:
+                            print(f"Web Search Trigger Word found")
+                        max_results = DuckDuckGoMaxSearchResults
+            if DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
+                if MessageDebug:
+                    print(f"inurl: or intitle: found")
+                max_results = DuckDuckGoMaxSearchResultsWithParams
+            if message.content.startswith("!"):
+                    max_results = 0
             if max_results > 0:
                 try:
-                    DDGSearchResults = await DDGS().text(message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                    DDGSearchResults = DDGS().text("inurl:wiki inurl:news" + message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
                                 max_results=max_results, safesearch='off', region='us-en', backend='api')
-                    result_count = 0
-                    DDGSearchResultsString = [
-                        f"\nTitle: {result['title']}\nLink: {result['href']}\nBody: {result['body']}"
+                    DDGSearchResultsList = [
+                        f"[Title: {result['title']} Link: {result['href']} Body: {result['body']}]"
                         for i, result in enumerate(DDGSearchResults)
                     ]
+                    DDGSearchResultsString = '\n'.join(DDGSearchResultsList)
                     if MessageDebug:
                         print(f"DuckDuckGo Search Results: {DDGSearchResultsString}")
                         for i, result in enumerate(DDGSearchResults):
                             print(f"Result {i+1}: {result}")
                 except DuckDuckGoSearchException as e:
                     print(f"An error occurred while searching: {e}")
+                    return
                 History = f"[Latest Information: {DDGSearchResultsString}]" + History
         if AllowWikipediaExtracts:
-            wikipedia_links = re.findall(r'wikipedia.org/wiki/([^/]+)', message.content)
-            if wikipedia_links:
-                for link in wikipedia_links:
+            WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^/\s]+)', message.content + " " + DDGSearchResultsString)
+            if WikipediaLinks:
+                for WikipediaLink in WikipediaLinks:
+                    if MessageDebug:
+                        print(f"Wikipedia Link found: {WikipediaLink}")
                     try:
-                        page = wikipedia.page(link)
-                        History = f"[Wikipedia Page: {page.content}]" + History
+                        WikipediaPage = wikipedia.page(WikipediaLink).content[:1000]
+                        #WikipediaPageSummary = WikipediaPage.summary
+                        History = f"[Wikipedia: {WikipediaPage}]" + History
+                        #History = f"[Wikipedia Page: {WikipediaPageSummary}]" + History
                         if MessageDebug:
-                            print(f"Wikipedia Page extracted: {link}")
-                    except wikipedia.exceptions.DisambiguationError as e:
-                        print(f"Wikipedia Disambiguation Error: {e}")
+                            print(f"Wikipedia Page extracted: {WikipediaLink}")
                     except wikipedia.exceptions.PageError as e:
                         print(f"Wikipedia Page Error: {e}")
-        Memory = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + Memory
+        History = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
         image_request = functions.check_for_image_request(user_input)
         if GenerateImageOnly and image_request:
             character = ""
