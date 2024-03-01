@@ -214,7 +214,7 @@ async def bot_answer(message):
                 max_results = DuckDuckGoMaxSearchResults
             if max_results > 0:
                 try:
-                    DDGSearchResults =  DDGS().text(message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                    DDGSearchResults = await DDGS().text(message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
                                 max_results=max_results, safesearch='off', region='us-en', backend='api')
                     result_count = 0
                     DDGSearchResultsString = [
@@ -241,7 +241,7 @@ async def bot_answer(message):
                         print(f"Wikipedia Disambiguation Error: {e}")
                     except wikipedia.exceptions.PageError as e:
                         print(f"Wikipedia Page Error: {e}")
-        History = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
+        Memory = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + Memory
         image_request = functions.check_for_image_request(user_input)
         if GenerateImageOnly and image_request:
             character = ""
@@ -729,7 +729,7 @@ async def view_configuration(interaction):
     # SpecificGuildMode, SpecificGuildModeIDs, SpecificGuildModeNames, SpecificChannelMode, SpecificChannelModeIDs, SpecificChannelModeNames
     await interaction.response.send_message(
         "The bot's current configuration is as follows:\n" +
-        "Response Max Length: " + str(ResponseMaxLength) + "(approx"+str(ResponseMaxLength*3)+"~"+str(ResponseMaxLength*4)+"characters)"  + "\n" +
+        "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx"+str(ResponseMaxLength*3)+"~"+str(ResponseMaxLength*4)+"characters)"  + "\n" +
         "Guild Memory (characters): " + str(GuildMemoryAmount) + "\n" +
         "Channel Memory (characters): " + str(ChannelMemoryAmount) + "\n" +
         "User Memory (characters): " + str(UserMemoryAmount) + "\n" +
@@ -738,12 +738,12 @@ async def view_configuration(interaction):
         "Allow Direct Messages: " + str(AllowDirectMessages) + "\n" +
         "UserRateLimitSeconds: " + str(UserRateLimitSeconds) + "\n" +
         "Reply to Bots: " + str(ReplyToBots) + "\n" +
-        "Mention or Reply Required:" + str(MentionOrReplyRequired) + "\n" +
+        "Mention or Reply Required: " + str(MentionOrReplyRequired) + "\n" +
         "Wikipedia Link Extracting?: " + str(AllowWikipediaExtracts) + "\n" +
         "Specific Guilds?: " + str(SpecificGuildMode) + " | " +
         str(SpecificGuildModeIDs) + str(SpecificGuildModeNames) + "\n" +
         "Specific Channels?: " + str(SpecificChannelMode) + " | " +
-        str(SpecificChannelModeIDs) + str(SpecificChannelModeNames)
+        str(SpecificChannelModeIDs) + str(SpecificChannelModeNames) + "\n"
     )
 
 # Slash commands for character card presets (if not interested in manually updating)
