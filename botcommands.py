@@ -1,3 +1,8 @@
+import os
+import datetime
+import discord
+from discord import Interaction, app_commands
+from discord.ext import commands
 
 # Slash command to update the bot's personality
 personality = app_commands.Group(
