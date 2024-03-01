@@ -59,7 +59,7 @@ async def bot_behavior(message):
             else:
                 MessageChannel = message.channel.name
                 MessageGuild = message.guild.name
-        print(MessageGuild + " > " + MessageChannel + " | " + message.author.name + ": " + message.content)
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H-%M') + " | " + MessageGuild + " > " + MessageChannel + " | " + message.author.name + ": " + message.content)
     
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
@@ -98,16 +98,16 @@ async def bot_behavior(message):
                 print("Denied: AllowDirectMessages is False")
             return False
 
-    # Check if the bot is in single guild mode - if it is, check if the message is from the correct guild
-    if SingleGuildMode and not (message.guild.id == SingleGuildModeID or message.guild.name == SingleGuildModeName):
+    # Check if the bot is in specific guild mode - if it is, check if the message is from the correct guild
+    if SpecificGuildMode and not (message.guild.id in SpecificGuildModeIDs or message.guild.name in SpecificGuildModeNames):
         if MessageDebug:
-            print(f"Denied: Guild id ({message.guild.id}) or name ({message.guild.name}) does not match ({SingleGuildModeID}) or ({SingleGuildModeName})")
+            print(f"Denied: Guild id ({message.guild.id}) or name ({message.guild.name}) does not match ({SpecificGuildModeIDs}) or ({SpecificGuildModeNames})")
         return False
 
-    # Check if the bot is in single channel mode - if it is, check if the message is from the correct channel
-    if SingleChannelMode and not (message.channel.id == SingleChannelModeID or message.channel.name == SingleChannelModeName):
+    # Check if the bot is in specific channel mode - if it is, check if the message is from the correct channel
+    if SpecificChannelMode and not (message.channel.id in SpecificChannelModeIDs or message.channel.name in SpecificChannelModeNames):
         if MessageDebug:
-            print(f"Denied: Channel id ({message.channel.id}) or name ({message.channel.name}) does not match ({SingleChannelModeID}) or ({SingleChannelModeName})")
+            print(f"Denied: Channel id ({message.channel.id}) or name ({message.channel.name}) does not match ({SpecificChannelModeIDs}) or ({SpecificChannelModeNames})")
         return False
 
     # Check if mentions are required to trigger the bot    
@@ -200,17 +200,21 @@ async def bot_answer(message):
                 History = ""
         if DuckDuckGoSearch:
             if SynonymRequired:
-                if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
+                for word in nltk.word_tokenize(message.content[:20]):
+                    synsets = wordnet.synsets(word)
+                    if any(w.lemmas()[0].name() for w in synsets if w.lemmas()[0].name() in ["search", "who", "what", "why", "when", "where"]):
+                        break
+                else:
                     max_results = 0
-            if DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
+            elif DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
                 max_results = DuckDuckGoMaxSearchResultsWithParams
             elif message.content.startswith("!"):
                 max_results = 0
             else:
-                max_results = 5
+                max_results = DuckDuckGoMaxSearchResults
             if max_results > 0:
                 try:
-                    DDGSearchResults =  DDGS().text(message.content.split('\n')[0] + " " + reply[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                    DDGSearchResults =  DDGS().text(message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
                                 max_results=max_results, safesearch='off', region='us-en', backend='api')
                     result_count = 0
                     DDGSearchResultsString = [
@@ -237,9 +241,9 @@ async def bot_answer(message):
                         print(f"Wikipedia Disambiguation Error: {e}")
                     except wikipedia.exceptions.PageError as e:
                         print(f"Wikipedia Page Error: {e}")
-        History = f"[You must speak as if it is the UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
+        History = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
         image_request = functions.check_for_image_request(user_input)
-        if config.GenerateImageOnly and image_request:
+        if GenerateImageOnly and image_request:
             character = ""
             character_card["name"] = ""
             character_card["persona"] = ""
@@ -385,30 +389,35 @@ async def send_to_model_queue():
                     )
                     response_text = response_data["results"][0]["text"]
                     if BadResponseSafeGuards:
+                        # Define the pattern to search for
+                        Pattern_EmptyMessage = r'[@<>\[\]]'
+                        Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
+                        Pattern_CharacterName = r'^@'+re.escape(content['UserName'])+r'$'
+                        Pattern_DisplayName = r'^@'+re.escape(content['BotDisplayName'])+r'$'
+
+                        # Check if the response text matches the pattern
                         if (
-                            # Prevent the bot from trying to send empty messages
                             response_text.strip() is None or response_text.strip() == ""
-                            or re.search(r'[@^<>\[\]]', response_text[:16], re.IGNORECASE)
-                            or re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE)
-                            or re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16], re.IGNORECASE)
-                            or re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16], re.IGNORECASE)
+                            or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
+                            or re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE)
+                            or re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE)
+                            or re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE)
                             or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
                         ):
                             # Print the reason for catching the response
                             if response_text.strip() is None or response_text.strip() == "":
                                 print("Empty message caught")
-                            elif re.search(r'[@^<>\[\]]', response_text[:16]):
+                            elif re.search(Pattern_EmptyMessage, response_text[:16]):
                                 print("Possible username caught:", response_text)
-                            elif re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE):
+                            elif re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE):
                                 print("Character name caught:", response_text)
-                            elif re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16], re.IGNORECASE):
+                            elif re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE):
                                 print("User name caught:", response_text)
-                            elif re.match(r'^@' + re.escape(content['BotDisplayName']) + r'$', response_text[:16], re.IGNORECASE):
+                            elif re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE):
                                 print("Bot display name caught:", response_text)
                             elif re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE):
                                 print("Chat log caught:", response_text)
                             # Retry by continuing the loop
-                                print(retry_count)
                             retry_count += 1
                             continue
                         if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
@@ -508,6 +517,7 @@ async def on_ready():
     global image_api
     global character_card
     text_api = await functions.set_api("text-default.json")
+    text_api["parameters"]["max_length"] = ResponseMaxLength
     image_api = await functions.set_api("image-default.json")
     api_check = await functions.api_status_check(
         text_api["address"] + text_api["model"], headers=text_api["headers"]
@@ -518,6 +528,7 @@ async def on_ready():
     asyncio.create_task(send_to_stable_diffusion_queue())
     asyncio.create_task(send_to_user_queue())
     client.tree.add_command(history)
+    client.tree.add_command(configuration)
     # client.tree.add_command(personality)
     # client.tree.add_command(character)
     # client.tree.add_command(parameters)
@@ -709,6 +720,60 @@ async def character_select_callback(interaction):
 
 # Slash commands for character card presets (if not interested in manually updating)
 parameters = app_commands.Group(
+    name="model-configuration",
+    description="View or changs the bot's current configuration.",
+)
+
+# Command to view a list of available characters.
+@configuration.command(
+    name="Configuration", description="View the bot's current configuration."
+)
+async def change_parameters(interaction):
+
+    # List the current configuration settings
+    # Settings listed are: ResponseMaxLength, GuildMemoryAmount, ChannelMemoryAmount, UserMemoryAmount, ChannelHistoryAmount,
+    # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowWikipediaExtracts,
+    # SpecificGuildMode, SpecificGuildModeIDs, SpecificGuildModeNames, SpecificChannelMode, SpecificChannelModeIDs, SpecificChannelModeNames
+    await interaction.response.send_message(
+        "The bot's current configuration is as follows:\n"
+        + "Response Max Length: "
+        + str(ResponseMaxLength)
+        + "\nGuild Memory: "
+        + str(GuildMemoryAmount)
+        + "\nChannel Memory: "
+        + str(ChannelMemoryAmount)
+        + "\nUser Memory: "
+        + str(UserMemoryAmount)
+        + "\nChannel History: "
+        + str(ChannelHistoryAmount)
+        + "\nUser History: "
+        + str(UserHistoryAmount)
+        + "\nAllow Direct Messages: "
+        + str(AllowDirectMessages)
+        + "\nUserRateLimitSeconds: "
+        + str(UserRateLimitSeconds)
+        + "\nReply to Bots: "
+        + str(ReplyToBots)
+        + "\nMention or Reply Required:"
+        + str(MentionOrReplyRequired)
+        + "Wikipedia Link Extracting?: "
+        + str(AllowWikipediaExtracts)
+        + "\Specific Guilds?: "
+        + str(SpecificGuildMode)
+        + " | "
+        + str(SpecificGuildModeIDs)
+        + str(SpecificGuildModeNames)
+        + "\Specific Channels?: "
+        + str(SpecificChannelMode)
+        + " | "
+        + str(SpecificChannelModeIDs)
+        + str(SpecificChannelModeNames)
+
+
+    )
+
+# Slash commands for character card presets (if not interested in manually updating)
+parameters = app_commands.Group(
     name="model-parameters",
     description="View or changs the bot's current LLM generation parameters.",
 )
@@ -768,6 +833,7 @@ async def parameter_select_callback(interaction):
 
 try:
     client.run(discord_api_key)
+    
 except Exception as e:
     client.close()
     asyncio.sleep(10)  # Add a 10 second delay
