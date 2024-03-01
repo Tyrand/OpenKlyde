@@ -26,7 +26,6 @@ from nltk.corpus import wordnet
 from profanity_check import predict, predict_prob
 import time
 
-
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix="$", intents=intents)
 intents.message_content = True
@@ -85,7 +84,7 @@ async def bot_behavior(message):
 
 
     # If the message starts with a symbol, don't respond.
-    if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
+    if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", ":", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
             if MessageDebug:
                 print("Denied: IgnoreSymbols is True and message starts with a symbol")
             return False
@@ -131,7 +130,7 @@ async def bot_answer(message):
         last_time = last_message_time[message.author.id]
         if current_time - last_time < UserRateLimitSeconds:
             # Ignore rate limit if user is admin
-            if (message.guild and message.author.guild_permissions.administrator) or message.author.id == DiscordAccountID:
+            if (message.guild and message.author.guild_permissions.administrator) or message.author.id in DiscordAccountIDs:
                 return True
             await message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
@@ -161,7 +160,7 @@ async def bot_answer(message):
     image_request = functions.check_for_image_request(user_input)
     character = functions.get_character(character_card)
     global text_api
-    if image_request and (message.author.id == DiscordAccountID or message.author.name=='sleinsama'):
+    if image_request and (message.author.id in DiscordAccountIDs):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         Memory = ""
@@ -201,41 +200,53 @@ async def bot_answer(message):
                 History = ""
         if DuckDuckGoSearch:
             if SynonymRequired:
-              if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
-               return False
+                if not any(wordnet.synsets(word) for word in nltk.word_tokenize(message.content[:20]) if any(w in wordnet.synsets(word) for w in ["search", "who", "what", "why", "when", "where"])):
+                    max_results = 0
             if DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
-                max_results = 15
+                max_results = DuckDuckGoMaxSearchResultsWithParams
+            elif message.content.startswith("!"):
+                max_results = 0
             else:
                 max_results = 5
-            try:
-                DDGSearchResults =  DDGS().text(message.content.split('\n')[0] + " " + reply[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
-                               max_results=max_results, safesearch='off', region='us-en', backend='api')
-                result_count = 0
-                DDGSearchResultsString = [
-                    f"Result {result_count + i + 1}:\nTitle: {result['title']}\nLink: {result['href']}\nBody: {result['body']}"
-                    for i, result in enumerate(DDGSearchResults)
-                ]
-                if MessageDebug:
-                    print(f"DuckDuckGo Search Results: {DDGSearchResultsString}")
-                    for i, result in enumerate(DDGSearchResults):
-                        print(f"Result {i+1}: {result}")
-            except DuckDuckGoSearchException as e:
-                print(f"An error occurred while searching: {e}")
-            History = f"[Latest Information, the user does not see this, repeat it back to them if required: {DDGSearchResultsString}]" + History
+            if max_results > 0:
+                try:
+                    DDGSearchResults =  DDGS().text(message.content.split('\n')[0] + " " + reply[:100] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                                max_results=max_results, safesearch='off', region='us-en', backend='api')
+                    result_count = 0
+                    DDGSearchResultsString = [
+                        f"\nTitle: {result['title']}\nLink: {result['href']}\nBody: {result['body']}"
+                        for i, result in enumerate(DDGSearchResults)
+                    ]
+                    if MessageDebug:
+                        print(f"DuckDuckGo Search Results: {DDGSearchResultsString}")
+                        for i, result in enumerate(DDGSearchResults):
+                            print(f"Result {i+1}: {result}")
+                except DuckDuckGoSearchException as e:
+                    print(f"An error occurred while searching: {e}")
+                History = f"[Latest Information: {DDGSearchResultsString}]" + History
         if AllowWikipediaExtracts:
             wikipedia_links = re.findall(r'wikipedia.org/wiki/([^/]+)', message.content)
             if wikipedia_links:
                 for link in wikipedia_links:
                     try:
                         page = wikipedia.page(link)
-                        History = f"[Wikipedia Extract: {page.summary}]" + History
+                        History = f"[Wikipedia Page: {page.content}]" + History
                         if MessageDebug:
-                            print(f"Wikipedia Summary extracted: {link}")
+                            print(f"Wikipedia Page extracted: {link}")
                     except wikipedia.exceptions.DisambiguationError as e:
                         print(f"Wikipedia Disambiguation Error: {e}")
                     except wikipedia.exceptions.PageError as e:
                         print(f"Wikipedia Page Error: {e}")
         History = f"[You must speak as if it is the UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
+        image_request = functions.check_for_image_request(user_input)
+        if config.GenerateImageOnly and image_request:
+            character = ""
+            character_card["name"] = ""
+            character_card["persona"] = ""
+            character_card["instructions"] = ""
+            Memory = ""
+            History = ""
+            reply = ""
         prompt = await functions.create_text_prompt(
             f"\n{user_input}",
             user,
@@ -376,8 +387,7 @@ async def send_to_model_queue():
                     if BadResponseSafeGuards:
                         if (
                             # Prevent the bot from trying to send empty messages
-                            response_text.strip() is None 
-                            or response_text.strip() == ""
+                            response_text.strip() is None or response_text.strip() == ""
                             or re.search(r'[@^<>\[\]]', response_text[:16], re.IGNORECASE)
                             or re.match(r'^@' + re.escape(character_card['name']) + r'$', response_text[:16], re.IGNORECASE)
                             or re.match(r'^@' + re.escape(content['UserName']) + r'$', response_text[:16], re.IGNORECASE)
@@ -411,7 +421,7 @@ async def send_to_model_queue():
                         break
                     # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
                     await asyncio.sleep(
-                        1
+                        0
                     )  # Add a delay to avoid excessive API requests (in seconds)
                 retry_count += 1
             if retry_count == 5:

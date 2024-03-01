@@ -47,7 +47,7 @@ ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a p
 
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
 DuckDuckGoMaxSearchResults = 5 # set to the maximum number of search results to fetch from DuckDuckGo
-DuckDuckGoMaxSearchResultsWithParams = 25 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
+DuckDuckGoMaxSearchResultsWithParams = 15 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
 AllowWikipediaExtracts = True # set to True to allow the bot to fetch summaries from Wikipedia articles
 SynonymRequired = True # set to True to require a synonym to be used in the prompt in order for a search to be performed (search / lookup / find / etc.)
 
