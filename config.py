@@ -24,6 +24,9 @@ UseGuildMemory = True # Set to False to disable guild memory
 ChannelMemoryAmount = 3000
 UseChannelMemory = True # Set to False to disable channel memory
 
+ResponseMaxLength = 800 # set to the maximum number of tokens the model will generate
+WikipediaExtractLength = 500 # set to the maximum number of characters to fetch from a Wikipedia article
+
 AllowDirectMessages = True # set to True to allow the bot to respond to direct messages
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned

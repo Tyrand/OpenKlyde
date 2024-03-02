@@ -236,8 +236,12 @@ async def bot_answer(message):
                         #History = f"[Wikipedia Page: {WikipediaPageSummary}]" + History
                         if MessageDebug:
                             print(f"Wikipedia Page extracted: {WikipediaLink}")
+                    except wikipedia.exceptions.DisambiguationError as e:
+                        print(f"Disambiguation page found: {e}")
+                        pass
                     except wikipedia.exceptions.PageError as e:
                         print(f"Wikipedia Page Error: {e}")
+                        pass
         History = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
         image_request = functions.check_for_image_request(user_input)
         if GenerateImageOnly and image_request:
