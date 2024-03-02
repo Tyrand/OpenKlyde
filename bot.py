@@ -44,15 +44,15 @@ status_last_update = None
 last_message_time = {}
 
 async def bot_behavior(message):
-    if LogAllMessages:
-        # log all messages into separate channel files
+    if LogMessagesToChannelHistory:
+        # Log the message to the channel history
         if message.guild:
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
 
     if MessageDebug:
-        print('_______________________')
+        print('____________________')
         if message.channel:
             if isinstance(message.channel, discord.DMChannel):
                 MessageChannel = "DM"
@@ -65,7 +65,7 @@ async def bot_behavior(message):
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
         if MessageDebug:
-            print("Denied: Blocked user")
+            print("No Response: Blocked user")
         return False
 
     # Don't respond to yourself or other bots unless specified
@@ -74,20 +74,20 @@ async def bot_behavior(message):
         or message.author.bot and not ReplyToBots
     ):
         if MessageDebug:
-            print("Denied: Self or other bot")
+            print("No Response: Self or other bot")
         return False
     
     # If the message is empty, don't respond
     if not message.content or message.content == "":
         if MessageDebug:
-            print("Denied: Empty message")
+            print("No Response: Empty message")
         return False
 
 
     # If the message starts with a symbol, don't respond.
     if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", ":", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
             if MessageDebug:
-                print("Denied: IgnoreSymbols is True and message starts with a symbol")
+                print("No Response: IgnoreSymbols is True and message starts with a symbol")
             return False
 
     if message.guild is None:
@@ -96,30 +96,30 @@ async def bot_behavior(message):
             return True
         else:
             if MessageDebug:
-                print("Denied: AllowDirectMessages is False")
+                print("No Response: AllowDirectMessages is False")
             return False
 
     # Check if the bot is in specific guild mode - if it is, check if the message is from the correct guild
     if SpecificGuildMode and not (message.guild.id in SpecificGuildModeIDs or message.guild.name in SpecificGuildModeNames):
         if MessageDebug:
-            print(f"Denied: Guild id ({message.guild.id}) or name ({message.guild.name}) does not match ({SpecificGuildModeIDs}) or ({SpecificGuildModeNames})")
+            print(f"No Response: Guild id ({message.guild.id}) or name ({message.guild.name}) does not match ({SpecificGuildModeIDs}) or ({SpecificGuildModeNames})")
         return False
 
     # Check if the bot is in specific channel mode - if it is, check if the message is from the correct channel
     if SpecificChannelMode and not (message.channel.id in SpecificChannelModeIDs or message.channel.name in SpecificChannelModeNames):
         if MessageDebug:
-            print(f"Denied: Channel id ({message.channel.id}) or name ({message.channel.name}) does not match ({SpecificChannelModeIDs}) or ({SpecificChannelModeNames})")
+            print(f"No Response: Channel id ({message.channel.id}) or name ({message.channel.name}) does not match ({SpecificChannelModeIDs}) or ({SpecificChannelModeNames})")
         return False
 
     # Check if mentions are required to trigger the bot    
     if MentionOrReplyRequired and not (client.user.mentioned_in(message) or (message.reference and message.reference.resolved.author == client.user)):
         if MessageDebug:
-            print("Denied: MentionOrReplyRequired is True and bot was not mentioned or replied to")
+            print("No Response: MentionOrReplyRequired is True and bot was not mentioned or replied to")
         return False
 
     # If the message has not yet been returned False, the bot will respond
     if MessageDebug:
-        print("Allowed: Bot will respond")
+        print("Will Response: Bot will respond")
 
     await bot_answer(message)
     return True
@@ -133,9 +133,11 @@ async def bot_answer(message):
             # Ignore rate limit if user is admin
             if (message.guild and message.author.guild_permissions.administrator) or message.author.id in DiscordAccountIDs:
                 return True
-            await message.add_reaction(RateLimitedEmoji)
+            message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
-                print(f"Denied: User's last message was {last_time - current_time} seconds ago. UserRateLimitSeconds is {UserRateLimitSeconds}")
+                print(f"No Response: User's last message was {last_time - current_time} seconds ago. UserRateLimitSeconds is {UserRateLimitSeconds}")
+            await asyncio.sleep(10)
+            await message.remove_reaction(RateLimitedEmoji, client.user)
             return False
     else:
         last_message_time[message.author.id] = time.time()
@@ -143,13 +145,18 @@ async def bot_answer(message):
         # Deny the prompt if it doesn't pass the profanity filter
         keywords = ["ethical", "guidelines", "authori", "permission", "consent", "appro", "allow"]
         if (profanity_check.predict_prob([message.content])>=ProfanityRating) or (len([keyword for keyword in keywords if keyword in message.content.lower()]) >= 2):
-            await message.add_reaction(ProfanityEmoji)
+            message.add_reaction(ProfanityEmoji)
             return False
-    await message.add_reaction(ReactionEmoji)
+    message.add_reaction(ReactionEmoji)
     user = message.author
     userID = message.author.id
     UserName = message.author.name
     # Clean the user's message to make it easy to read
+    global text_api
+    Memory = ""
+    History = ""
+    WebResults = ""
+    DDGSearchResultsString = ""
     user_input = functions.clean_user_message(client,message.clean_content)
     if isinstance(message.channel, discord.TextChannel):
         print(f"{message.channel.name} | {UserName}: {user_input}")
@@ -160,22 +167,16 @@ async def bot_answer(message):
     # Is this an image request?
     image_request = functions.check_for_image_request(user_input)
     character = functions.get_character(character_card)
-    global text_api
     if image_request and (message.author.id in DiscordAccountIDs):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
-        Memory = ""
-        History = ""
-        DDGSearchResultsString = ""
         reply = await get_reply(message)
         if UseUserMemory:
             UserMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
             Memory = UserMemory + Memory
         if UseChannelMemory and message.guild:
-            if ChannelHistoryOverride:
-                ChannelName = ChannelHistoryOverride
-            else:
-                ChannelName = message.channel.name
+            if ChannelHistoryOverride: ChannelName = ChannelHistoryOverride
+            else: ChannelName = message.channel.name
             ChannelMemory = str(await functions.get_channel_memory(message.guild.name, ChannelName, ChannelMemoryAmount))
             Memory = ChannelMemory + Memory
         if UseGuildMemory and message.guild:
@@ -196,7 +197,7 @@ async def bot_answer(message):
             if not TriggerWordRequiredForSearch:
                 max_results = DuckDuckGoMaxSearchResults
             elif TriggerWordRequiredForSearch:
-                    if any(word in message.content.lower() for word in ["who", "what", "why", "when", "where", "search"]):
+                    if any(word in message.content.lower() for word in ["who", "what", "why", "when", "where", "search", "google", "bing", "how", "which", "find", "info"]):
                         if MessageDebug:
                             print(f"Web Search Trigger Word found")
                         max_results = DuckDuckGoMaxSearchResults
@@ -207,42 +208,45 @@ async def bot_answer(message):
             if message.content.startswith("!"):
                     max_results = 0
             if max_results > 0:
+                DDQSearchQuery = "inurl:wiki inurl:news" + message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d')
                 try:
-                    DDGSearchResults = DDGS().text("inurl:wiki inurl:news" + message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d'), 
+                    DDGSearchResults = DDGS().text(DDQSearchQuery, 
                                 max_results=max_results, safesearch='off', region='us-en', backend='api')
                     DDGSearchResultsList = [
-                        f"[Title: {result['title']} Link: {result['href']} Body: {result['body']}]"
+                        f"[Web Link {i+1} | {result['title']} | {result['href']} | {result['body']}]"
                         for i, result in enumerate(DDGSearchResults)
                     ]
                     DDGSearchResultsString = '\n'.join(DDGSearchResultsList)
+                    WebResults = DDGSearchResultsString + WebResults
                     if MessageDebug:
                         print(f"DuckDuckGo Search Results: {DDGSearchResultsString}")
                         for i, result in enumerate(DDGSearchResults):
                             print(f"Result {i+1}: {result}")
                 except DuckDuckGoSearchException as e:
                     print(f"An error occurred while searching: {e}")
-                    return
-                History = f"[Latest Information: {DDGSearchResultsString}]" + History
-        if AllowWikipediaExtracts:
-            WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^/\s]+)', message.content + " " + DDGSearchResultsString)
-            if WikipediaLinks:
-                for WikipediaLink in WikipediaLinks:
-                    if MessageDebug:
-                        print(f"Wikipedia Link found: {WikipediaLink}")
-                    try:
-                        WikipediaPage = wikipedia.page(WikipediaLink).content[:1000]
-                        #WikipediaPageSummary = WikipediaPage.summary
-                        History = f"[Wikipedia: {WikipediaPage}]" + History
-                        #History = f"[Wikipedia Page: {WikipediaPageSummary}]" + History
+                    pass
+            if AllowWikipediaExtracts:
+                WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s]+)', message.content + " " + DDGSearchResultsString)
+                if WikipediaLinks:
+                    for WikipediaLink in WikipediaLinks:
                         if MessageDebug:
-                            print(f"Wikipedia Page extracted: {WikipediaLink}")
-                    except wikipedia.exceptions.DisambiguationError as e:
-                        print(f"Disambiguation page found: {e}")
-                        pass
-                    except wikipedia.exceptions.PageError as e:
-                        print(f"Wikipedia Page Error: {e}")
-                        pass
-        History = f"[Current UTC date and time: ({datetime.datetime.now().strftime('%Y-%m-%d %H-%M')}) (Unix time: {int(time.time())})]" + History
+                            print(f"Wikipedia Link found: {WikipediaLink}")
+                        try:
+                            search_results = wikipedia.search(WikipediaLink)
+                            if search_results:
+                                top_result = search_results[0]
+                                WikipediaPage = wikipedia.page(top_result).content[:WikipediaExtractLength]
+                                WebResults = f"[{WikipediaPage}]" + WebResults
+                                if MessageDebug:
+                                    print(f"Wikipedia Page extracted: {top_result}")
+                                    print(f"Wikipedia Page Content {WikipediaPage}\n____________________")
+                            else:
+                                print(f"No Wikipedia results found for: {WikipediaLink}")
+                        except wikipedia.exceptions.PageError as e:
+                            print(f"Wikipedia Page Error: {e}")
+                            pass
+        WebResults = f"[Current UTC Unix time: {int(time.time())}]" + WebResults
+        Memory = Memory or "";History = History or "";WebResults = WebResults or "";DDGSearchResultsString = DDGSearchResultsString or ""
         image_request = functions.check_for_image_request(user_input)
         if GenerateImageOnly and image_request:
             character = ""
@@ -259,6 +263,7 @@ async def bot_answer(message):
             character_card["name"],
             Memory,
             History,
+            WebResults,
             reply,
             text_api,
         )
@@ -281,8 +286,13 @@ async def bot_answer(message):
         "image": image_request,
     }
     queue_to_process_message.put_nowait(queue_item)
-    # Send the typing status to the channel so the user knows we're working on it
-    await message.channel.typing()
+    # Toggle the typing status to the channel so the user knows we're working on it
+    await start_typing_status(message)
+
+async def start_typing_status(message):
+    while not queue_to_process_message.empty():
+        await message.channel.typing()
+        await asyncio.sleep(1)
 
 # Get the reply to a message if it's relevant to the conversation
 async def get_reply(message):
@@ -377,65 +387,64 @@ async def send_to_model_queue():
         async with aiohttp.ClientSession() as session:
             retry_count = 0
             while retry_count < 5:
-                await content["message"].channel.typing()
-                async with session.post(
-                    text_api["address"] + text_api["generation"],
-                    headers=text_api["headers"],
-                    data=content["prompt"],
-                ) as response:
-                    response_data = await response.json()
-                    # Log the API response
-                    await functions.write_to_log(
-                        f"Received API response from LLM model: {response_data}"
-                    )
-                    response_text = response_data["results"][0]["text"]
-                    if BadResponseSafeGuards:
-                        # Define the pattern to search for
-                        Pattern_EmptyMessage = r'[@<>\[\]]'
-                        Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
-                        Pattern_CharacterName = r'^@'+re.escape(content['UserName'])+r'$'
-                        Pattern_DisplayName = r'^@'+re.escape(content['BotDisplayName'])+r'$'
+                try:
+                    async with session.post(
+                        text_api["address"] + text_api["generation"],
+                        headers=text_api["headers"],
+                        data=content["prompt"],
+                    ) as response:
+                        response_data = await response.json()
+                        # Log the API response
+                        await functions.write_to_log(
+                            f"Received API response from LLM model: {response_data}"
+                        )
+                        response_text = response_data["results"][0]["text"]
+                        if BadResponseSafeGuards:
+                            # Define the pattern to search for
+                            Pattern_EmptyMessage = r'[@<>\[\]]'
+                            Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
+                            Pattern_CharacterName = r'^@'+re.escape(content['UserName'])+r'$'
+                            Pattern_DisplayName = r'^@'+re.escape(content['BotDisplayName'])+r'$'
 
-                        # Check if the response text matches the pattern
-                        if (
-                            response_text.strip() is None or response_text.strip() == ""
-                            or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
-                            or re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE)
-                            or re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE)
-                            or re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE)
-                            or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
-                        ):
-                            # Print the reason for catching the response
-                            if response_text.strip() is None or response_text.strip() == "":
-                                print("Empty message caught")
-                            elif re.search(Pattern_EmptyMessage, response_text[:16]):
-                                print("Possible username caught:", response_text)
-                            elif re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE):
-                                print("Character name caught:", response_text)
-                            elif re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE):
-                                print("User name caught:", response_text)
-                            elif re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE):
-                                print("Bot display name caught:", response_text)
-                            elif re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE):
-                                print("Chat log caught:", response_text)
-                            # Retry by continuing the loop
-                            retry_count += 1
-                            continue
-                        if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
-                            # Retry by continuing the loop
-                            retry_count += 1
-                            continue
-                        # Send the response to the next step
-                        await handle_llm_response(content, response_data)
-                        queue_to_process_message.task_done()
-                        break
-                    # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
-                    await asyncio.sleep(
-                        0
-                    )  # Add a delay to avoid excessive API requests (in seconds)
-                retry_count += 1
+                            # Check if the response text matches the pattern
+                            if (
+                                response_text.strip() is None or response_text.strip() == ""
+                                or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
+                                or re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE)
+                                or re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE)
+                                or re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE)
+                                or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
+                            ):
+                                # Print the reason for catching the response
+                                if response_text.strip() is None or response_text.strip() == "":
+                                    print("Empty message caught")
+                                elif re.search(Pattern_EmptyMessage, response_text[:16]):
+                                    print("Possible username caught:", response_text)
+                                elif re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE):
+                                    print("Character name caught:", response_text)
+                                elif re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE):
+                                    print("User name caught:", response_text)
+                                elif re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE):
+                                    print("Bot display name caught:", response_text)
+                                elif re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE):
+                                    print("Chat log caught:", response_text)
+                            if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
+                                # Retry by continuing the loop
+                                retry_count += 1
+                                continue
+                            # Send the response to the next step
+                            await handle_llm_response(content, response_data)
+                            queue_to_process_message.task_done()
+                            break
+                        # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
+                        await asyncio.sleep(
+                            1
+                        )  # Add a delay to avoid excessive API requests (in seconds)
+                except Exception as e:
+                    print(f"Error occurred: {e}")
+                    retry_count += 1
             if retry_count == 5:
-                response_text = '||Could not generate a response correctly after several attempts||'
+                response_text = 'Could not generate a response correctly after 5 attempts. Please try again or use a different prompt.'
                 print('text: ' + response_text)
                 await content['message'].reply(response_text)
                 queue_to_process_message.task_done()
@@ -443,34 +452,41 @@ async def send_to_model_queue():
 async def send_to_stable_diffusion_queue():
     global image_api
     while True:
-        image_prompt = await queue_to_process_image.get()
-        data = image_api["parameters"]
-        data["prompt"] += image_prompt["response"]
-        data_json = json.dumps(data)
-        await functions.write_to_log(
-            "Sending prompt from "
-            + image_prompt["content"]["UserName"]
-            + " to Stable Diffusion model."
-        )
-        async with ClientSession() as session:
-            async with session.post(
-                image_api["link"], headers=image_api["headers"], data=data_json
-            ) as response:
-                response = await response.read()
-                sd_response = json.loads(response)
-                image = functions.image_from_string(sd_response["images"][0])
-                queue_item = {
-                    "response": image_prompt["response"],
-                    "image": image,
-                    "content": image_prompt["content"],
-                }
-                queue_to_send_message.put_nowait(queue_item)
-                queue_to_process_image.task_done()
+        try:
+            image_prompt = await queue_to_process_image.get()
+            data = image_api["parameters"]
+            data["prompt"] += image_prompt["response"]
+            data_json = json.dumps(data)
+            await functions.write_to_log(
+                "Sending prompt from "
+                + image_prompt["content"]["UserName"]
+                + " to Stable Diffusion model."
+            )
+            async with ClientSession() as session:
+                async with session.post(
+                    image_api["link"], headers=image_api["headers"], data=data_json
+                ) as response:
+                    response = await response.read()
+                    sd_response = json.loads(response)
+                    image = functions.image_from_string(sd_response["images"][0])
+                    queue_item = {
+                        "response": image_prompt["response"],
+                        "image": image,
+                        "content": image_prompt["content"],
+                    }
+                    queue_to_send_message.put_nowait(queue_item)
+                    queue_to_process_image.task_done()
+        except Exception as e:
+            await functions.write_to_log(f"Error processing image: {str(e)}")
+            # Handle the error here
+            pass
 
 # All messages are checked to not be over Discord's 2000 characters limit - They are split at the last new line and sent concurrently if they are
 async def send_large_message(original_message, reply_content, file=None):
     max_chars = 2000
     chunks = []
+    if not reply_content or reply_content == "":
+        reply_content = " "
     while len(reply_content) > max_chars:
         last_newline_index = reply_content.rfind("\n", 0, max_chars)
         if last_newline_index == -1:
@@ -480,10 +496,14 @@ async def send_large_message(original_message, reply_content, file=None):
         reply_content = reply_content[last_newline_index:].lstrip()
     chunks.append(reply_content)
     for chunk in chunks:
-        if file:
-            await original_message.reply(chunk, file=file)
-        else:
-            await original_message.reply(chunk)
+        try:
+            if file:
+                await original_message.reply(chunk, file=file)
+            else:
+                await original_message.reply(chunk)
+        except discord.errors.HTTPException:
+            # Handle the exception here
+            pass
 
 # Reply queue that's used to allow the bot to reply even while other stuff is processing
 async def send_to_user_queue():
@@ -498,6 +518,7 @@ async def send_to_user_queue():
         else:
             await send_large_message(reply["content"]["message"], reply["response"])
         # Update reactions after message has been sent
+        reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
@@ -530,12 +551,12 @@ async def on_ready():
     asyncio.create_task(send_to_user_queue())
     client.tree.add_command(history)
     client.tree.add_command(configuration)
-    # client.tree.add_command(personality)
-    # client.tree.add_command(character)
-    # client.tree.add_command(parameters)
+    #client.tree.add_command(personality)
+    #client.tree.add_command(character)
+    #client.tree.add_command(parameters)
 
     # Sync current slash commands (commented out unless we have new commands)
-    await client.tree.sync()
+    #client.tree.sync()
 
 # Slash command to update the bot's personality
 personality = app_commands.Group(
@@ -729,7 +750,7 @@ async def view_configuration(interaction):
     # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowWikipediaExtracts,
     # SpecificGuildMode, SpecificGuildModeIDs, SpecificGuildModeNames, SpecificChannelMode, SpecificChannelModeIDs, SpecificChannelModeNames
     await interaction.response.send_message(
-        "The bot's current configuration is as follows:\n" +
+        "The bot's current configuration is as follows:\n" + 
         "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx"+str(ResponseMaxLength*3)+"~"+str(ResponseMaxLength*4)+"characters)"  + "\n" +
         "Guild Memory (characters): " + str(GuildMemoryAmount) + "\n" +
         "Channel Memory (characters): " + str(ChannelMemoryAmount) + "\n" +
@@ -808,16 +829,28 @@ async def parameter_select_callback(interaction):
 
 UserContextLocation = "context\\users"
 
+global last_message
+
 @client.event
 async def on_message(message):
+    global last_message
+    last_message = message
+
     # Bot will now either do or not do something!
     await bot_behavior(message)
 
+interrupt_count = 0
+
 try:
     client.run(discord_api_key)
-    
-except Exception as e:
+except KeyboardInterrupt:
+    interrupt_count += 1
+    print("KeyboardInterrupt detected, do it again to exit.")
+    if interrupt_count >= 2:
+        raise
+except BaseException as e:
     client.close()
     asyncio.sleep(1)  # Add a 10 second delay
     client.run(discord_api_key)
+    print(f"An error occurred: {e}")
     print("Bot restarted successfully.")

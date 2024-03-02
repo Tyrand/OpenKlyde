@@ -24,17 +24,16 @@ UseGuildMemory = True # Set to False to disable guild memory
 ChannelMemoryAmount = 3000
 UseChannelMemory = True # Set to False to disable channel memory
 
-ResponseMaxLength = 800 # set to the maximum number of tokens the model will generate
-WikipediaExtractLength = 500 # set to the maximum number of characters to fetch from a Wikipedia article
+ResponseMaxLength = 800 # set to the maximum number of tokens the model will generateR
 
-AllowDirectMessages = True # set to True to allow the bot to respond to direct messages
+AllowDirectMessages = True # set to True to allow the bot to respond to direct message
 ReplyToBots = False # set to True to allow the bot to respond to other bots
 MentionOrReplyRequired = True # set to True to reply to all messages without needing to be mentioned
 AllowBotToMention = False # set to True to allow the bot to mention (ping) users in its responses
 UserRateLimitSeconds = 10 # set to the number of seconds to wait the same user is allowed to submit a prompt
 RateLimitedEmoji = "⏳" # set to the emoji that the bot will react with when a user is rate limited
 
-LogAllMessages = False # set to True to log all messages to a file
+LogMessagesToChannelHistory = False # set to True to log all messages to a file
 AddTimestamp = False # set to True to add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model
 LogNoTextUploads = False # set to True to log messages without text content as <media>
 
@@ -52,7 +51,9 @@ DuckDuckGoSearch = True # set to True to allow the bot to fetch search results f
 DuckDuckGoMaxSearchResults = 5 # set to the maximum number of search results to fetch from DuckDuckGo
 DuckDuckGoMaxSearchResultsWithParams = 15 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
 AllowWikipediaExtracts = True # set to True to allow the bot to fetch summaries from Wikipedia articles
-SynonymRequired = True # set to True to require a synonym to be used in the prompt in order for a search to be performed (search / lookup / find / etc.)
+WikipediaExtractLength = 500 # set to the maximum number of characters to fetch from a Wikipedia article
+
+TriggerWordRequiredForSearch = True # set to True to require a synonym of (Who/What/Why/When/Where/Search) be in the prompt for a search to be performed
 
 SingleChannelMode = False # set to True to only track and reply messages from a single channel
 SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
