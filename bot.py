@@ -55,7 +55,14 @@ def custom_print(*args, **kwargs):
 builtins.print = custom_print
 
 async def bot_behavior(message):
-    if LogMessagesToChannelHistory:
+    if LogAllMessagesToChannelHistory:
+        # Log the message to the channel history
+        if message.guild:
+            await functions.add_to_channel_history(
+                message.guild, message.channel, message.author, message.content
+            )
+
+    if LogAllMessagesToUserHistory:
         # Log the message to the channel history
         if message.guild:
             await functions.add_to_channel_history(
@@ -231,7 +238,7 @@ async def bot_answer(message):
                         for i, result in enumerate(DDGSearchResults)
                     ]
                     DDGSearchResultsString = '\n'.join(DDGSearchResultsList)
-                    #WebResults = DDGSearchResultsString + WebResults
+                    WebResults = WebResults + DDGSearchResultsString
                     if MessageDebug:
                         print(f"DuckDuckGo Search Results:\n{DDGSearchResultsString}")
                 except DuckDuckGoSearchException as e:
@@ -260,7 +267,7 @@ async def bot_answer(message):
                         for p in paragraphs:
                             p_text = p.get_text().strip()
                             similarity = SequenceMatcher(None, p_text, message.content).ratio()
-                            if similarity >= 0.25:  # Adjust the threshold as needed
+                            if similarity >= 0.2:  # Adjust the threshold as needed
                                 if MessageDebug:
                                     print(f"Similarity: {similarity} | {p_text}")
                                 RelevantParagraphs.append(p_text)
@@ -279,16 +286,16 @@ async def bot_answer(message):
                     RelevantSentencesTrimmed = ""
                     WikipediaLinkDecoded = unquote(WikipediaLink)
                     try:
-                        search_results = wikipedia.search(WikipediaLinkDecoded)
+                        search_results = wikipedia.search(WikipediaLinkDecoded, timeout=5)
                         if search_results:
                             top_result = search_results[0]
-                            WikipediaPage = wikipedia.page(top_result)
+                            WikipediaPage = wikipedia.page(top_result, timeout=5)
                             WikipediaPageSentences = WikipediaPage.content.split('. ')
                             WikipediaPageSentencesArray = [sentence.strip() for sentence in WikipediaPageSentences]
                             RelevantSentences = []
                             for sentence in WikipediaPageSentencesArray:
                                 similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                                if similarity >= 0.25:  # Adjust the threshold as needed
+                                if similarity >= 0.2:  # Adjust the threshold as needed
                                     if MessageDebug:
                                         print(f"Similarity: {similarity} | {sentence}")
                                     RelevantSentences.append(sentence)
@@ -309,16 +316,16 @@ async def bot_answer(message):
                     RelevantSentencesTrimmed = ""
                     FandomLinkDecoded = unquote(FandomLink)
                     try:
-                        search_results = fandom.search(FandomLinkDecoded)
+                        search_results = fandom.search(FandomLinkDecoded, timeout=5)
                         if search_results:
                             top_result = search_results[0]
-                            FandomPage = fandom.page(top_result)
+                            FandomPage = fandom.page(top_result, timeout=5)
                             FandomPageSentences = FandomPage.content.split('. ')
                             FandomPageSentencesArray = [sentence.strip() for sentence in FandomPageSentences]
                             RelevantSentences = []
                             for sentence in FandomPageSentencesArray:
                                 similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                                if similarity >= 0.25:  # Adjust the threshold as needed
+                                if similarity >= 0.2:  # Adjust the threshold as needed
                                     if MessageDebug:
                                         print(f"Similarity: {similarity} | {sentence}")
                                     RelevantSentences.append(sentence)
@@ -459,7 +466,7 @@ async def send_api_request(session, url, headers, data):
     async with session.post(url, headers=headers, data=data) as response:
         return await response.json()
 
-async def is_valid_response(response_text):
+async def is_valid_response(content,response_text):
     # Define the pattern to search for
     Pattern_EmptyMessage = r'[@<>\[\]]'
     Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
@@ -511,7 +518,7 @@ async def send_to_model_queue():
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
-                    if is_valid_response(response_text):
+                    if await is_valid_response(content,response_text):
                         # Send the response to the next step
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
@@ -525,6 +532,7 @@ async def send_to_model_queue():
                     retry_count += 1
             if retry_count == 5:
                 response_text = 'Could not generate a response correctly after 5 attempts. Please try again or use a different prompt.'
+                await content["message"].remove_reaction(ReactionEmoji, client.user)
                 print('text: ' + response_text)
                 await content['message'].reply(response_text)
                 queue_to_process_message.task_done()
