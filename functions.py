@@ -11,16 +11,21 @@ from datetime import datetime
 from config import *
 from bs4 import BeautifulSoup
 import wikipedia
+from collections import deque
 import nltk
 from nltk.metrics import edit_distance
 
 async def set_api(config_file):
     # Set API struct from JSON file
     file = get_file_name("configurations", config_file)
-    contents = await get_json_file(file)
     api = {}  # Initialize the api variable
-    if contents is not None:
-        api.update(contents)
+    
+    try:
+        with open(file, "r") as json_file:
+            api.update(json.load(json_file))
+    except Exception as e:
+        await write_to_log(f"An unexpected error occurred: {e}")
+
     return api
 
 async def api_status_check(link, headers):
@@ -45,14 +50,13 @@ async def get_json_file(filename):
         with open(filename, "r") as file:
             return json.load(file)
     except FileNotFoundError:
-        await write_to_log("File " + filename + " not found. Where did you lose it?")
-        return None
+        await write_to_log(f"File {filename} not found.")
     except json.JSONDecodeError:
-        await write_to_log("Unable to parse " + filename + " as JSON.")
-        return None
+        await write_to_log(f"Unable to parse {filename} as JSON.")
     except Exception as e:
-        await write_to_log("An unexpected error occurred: " + e)
-        return None
+        await write_to_log(f"An unexpected error occurred: {e}")
+
+    return None
 
 async def write_to_log(information):
     # Write a line to the log file
@@ -63,43 +67,38 @@ async def write_to_log(information):
 
 def check_for_image_request(user_message):
     # Check if user is looking for an image to be generated
-    user_message = user_message.lower()
-    pattern = re.compile('~(create|generate|draw|show)')
-    return bool(pattern.search(user_message))
+    return bool(re.search(r'~(create|generate|draw|show)', user_message, re.IGNORECASE))
 
-async def create_text_prompt(
-    user_input, user, character, bot, memory, history, WebResults, reply, text_api
-):
+
+async def create_text_prompt(user_input, user, character, bot, memory, history, WebResults, reply, text_api):
     # Create a text prompt for text generation
     prompt = f"{character}{memory}{history}{WebResults}{reply}{user.name}: {user_input}\n{bot}: "
-    # stop_sequence = [f"{user.name}:", f"{bot}:", "You:"]
-    stop_sequence = [f"{user.name}:", f"{bot}:", f"@{bot}", "You:"]
-    data = text_api["parameters"]
-    data.update({"prompt": prompt})
-    data.update(
-        {"stop": stop_sequence}
-        if text_api["name"] == "openai"
-        else {"stop_sequence": stop_sequence}
-    )
+    stop_sequence = ["You:", f"{user.name}:", f"{bot}:", f"@{bot}"]
+    
+    if text_api["name"] == "openai":
+        data = text_api["parameters"].copy()
+        data.update({"prompt": prompt, "stop": stop_sequence})
+    else:
+        data = text_api["parameters"].copy()
+        data.update({"prompt": prompt, "stop_sequence": stop_sequence})
+
     return json.dumps(data)
+
 
 async def create_image_prompt(user_input, character, text_api):
     # Create an image prompt for image generation
     user_input = user_input.lower()
-    subject = (
-        user_input.split("of", 1)[1]
-        if "of" in user_input
-        else character + "Please describe yourself in vivid detail."
+    subject = user_input.split("of", 1)[1] if "of" in user_input else f"{character}Please describe yourself in vivid detail."
+    
+    prompt = (
+        f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n"
+        f"### Instruction:\nPlease describe the following in vivid detail:{subject}\n\n### Response:\n"
     )
-    prompt = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\nPlease describe the following in vivid detail:{subject}\n\n### Response:\n"
+    
     stop_sequence = ["### Instruction:", "### Response:", "You:"]
-    data = text_api["parameters"]
-    data.update({"prompt": prompt})
-    data.update(
-        {"stop": stop_sequence}
-        if text_api["name"] == "openai"
-        else {"stop_sequence": stop_sequence}
-    )
+    data = text_api["parameters"].copy()
+    data.update({"prompt": prompt, "stop_sequence": stop_sequence})
+
     return json.dumps(data)
 
 async def get_user_memory(user, characters):
@@ -127,12 +126,12 @@ async def get_user_memory(user, characters):
             return trimmed_contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
-        return None, 0
+        return None
     except Exception as e:
         await write_to_log(
             f"An unexpected error occurred while accessing {file_path}: {e}"
         )
-        return None, 0
+        return None
 
 async def get_guild_memory(guild, characters):
     # Get guild conversation history
@@ -168,34 +167,28 @@ async def get_guild_memory(guild, characters):
 
 async def get_channel_memory(GuildName, ChannelName, characters):
     # Get channel conversation memory
-    file_path = get_file_name(f"memory\\guilds\\{GuildName}", f"{ChannelName}.txt")
+    file_path = get_file_name("memory\\guilds", f"{GuildName}\\{ChannelName}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            print("Accessed:", file_path)
+            print("Accessed: " + file_path)
             print(
-                "Total channel_memory characters:",
-                len(contents),
-                "Total channel_memory lines:",
-                contents.count("\n"),
+                "Total channel_memory characters: " + str(len(contents)) +
+                ", Total channel_memory lines: " + str(contents.count('\\n'))
             )
             if len(contents) > characters:
                 contents = contents[-characters:]
             trimmed_contents = contents.strip()
             print(
-                "Trimmed channel_memory characters:",
-                len(trimmed_contents),
-                "Trimmed channel_memory lines:",
-                trimmed_contents.count("\n"),
+                "Trimmed channel_memory characters: " + str(len(trimmed_contents)) +
+                ", Trimmed channel_memory lines: " + str(trimmed_contents.count('\\n'))
             )
             return trimmed_contents
     except FileNotFoundError:
-        await write_to_log(f"File {file_path} not found. Where did you lose it?")
+        await write_to_log("File " + file_path + " not found. Where did you lose it?")
         return None, 0
     except Exception as e:
-        await write_to_log(
-            f"An unexpected error occurred while accessing {file_path}: {e}"
-        )
+        await write_to_log("An unexpected error occurred while accessing " + file_path + ": " + str(e))
         return None, 0
 
 async def get_channel_history(GuildName, ChannelName, characters):
@@ -310,9 +303,9 @@ async def prune_text_file(file, trim_to):
     # Prune lines from a text file
     try:
         with open(file, "r", encoding="utf-8") as f:
-            contents = f.readlines()[-trim_to:]
+            lines = deque(f, maxlen=trim_to)
         with open(file, "w", encoding="utf-8") as f:
-            f.writelines(contents)
+            f.writelines(lines)
     except FileNotFoundError:
         await write_to_log(f"Could not prune file {file} because it doesn't exist.")
 
@@ -325,12 +318,11 @@ async def append_text_file(file, text):
     with open(file, "a+", encoding="utf-8") as context:
         context.write(text)
 
-def clean_user_message(client,user_input):
+def clean_user_message(client, user_input):
     # Clean user input to the bot
-    bot_tags = [re.escape(f"@{client.user.name}#{client.user.discriminator}").lower(), re.escape(f"@{client.user.name}").lower()]
-    pattern = re.compile("|".join(bot_tags), re.IGNORECASE)
-    cleaned_input = pattern.sub("", user_input)
-    return cleaned_input.strip()
+    bot_tags = [f"@{client.user.name}#{client.user.discriminator}".lower(), f"@{client.user.name}".lower()]
+    pattern = re.compile("|".join(map(re.escape, bot_tags)), re.IGNORECASE)
+    return pattern.sub("", user_input).strip()
 
 async def clean_llm_reply(message, UserName, bot):
     # Clean generated reply
@@ -369,8 +361,9 @@ def get_file_list(directory):
 
 def image_from_string(image_string):
     # Create an image from a base64-encoded string
-    img = base64.b64decode(image_string)
-    name = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-    with open(name, "wb") as f:
-        f.write(img)
-    return name
+    img_data = base64.b64decode(image_string)
+    with Image.open(BytesIO(img_data)) as img_obj:
+        # Save the image to a temporary file
+        temp_file = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        img_obj.save(temp_file)
+        return temp_file
