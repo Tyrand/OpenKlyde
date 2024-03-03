@@ -9,7 +9,6 @@ import functions
 import httpx
 import importlib
 import json
-import nltk
 import os
 import profanity_check
 import random
@@ -23,9 +22,10 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 from duckduckgo_search import DDGS, AsyncDDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
-from nltk.corpus import wordnet
 from profanity_check import predict, predict_prob
 import time
+import threading
+import builtins
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix="$", intents=intents)
@@ -42,6 +42,15 @@ image_api = {}
 status_last_update = None
 # Dictionary to keep track of the last message time for each user
 last_message_time = {}
+
+# Save the original print function
+original_print = builtins.print
+
+def custom_print(*args, **kwargs):
+    original_print("["+datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')+"] | ", end='')
+    original_print(*args, **kwargs)
+    
+builtins.print = custom_print
 
 async def bot_behavior(message):
     if LogMessagesToChannelHistory:
@@ -60,7 +69,7 @@ async def bot_behavior(message):
             else:
                 MessageChannel = message.channel.name
                 MessageGuild = message.guild.name
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S') + " | " + MessageGuild + " > " + MessageChannel + " | " + message.author.name + ": " + message.content)
+        print(MessageGuild + " > " + MessageChannel + " | " + message.author.name + ": " + message.content)
     
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
@@ -133,7 +142,7 @@ async def bot_answer(message):
             # Ignore rate limit if user is admin
             if (message.guild and message.author.guild_permissions.administrator) or message.author.id in DiscordAccountIDs:
                 return True
-            message.add_reaction(RateLimitedEmoji)
+            await message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
                 print(f"No Response: User's last message was {last_time - current_time} seconds ago. UserRateLimitSeconds is {UserRateLimitSeconds}")
             await asyncio.sleep(10)
@@ -145,9 +154,9 @@ async def bot_answer(message):
         # Deny the prompt if it doesn't pass the profanity filter
         keywords = ["ethical", "guidelines", "authori", "permission", "consent", "appro", "allow"]
         if (profanity_check.predict_prob([message.content])>=ProfanityRating) or (len([keyword for keyword in keywords if keyword in message.content.lower()]) >= 2):
-            message.add_reaction(ProfanityEmoji)
+            await message.add_reaction(ProfanityEmoji)
             return False
-    message.add_reaction(ReactionEmoji)
+    await message.add_reaction(ReactionEmoji)
     user = message.author
     userID = message.author.id
     UserName = message.author.name
@@ -193,6 +202,7 @@ async def bot_answer(message):
             ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
             History = f"[Chat log for channel '{message.channel.name}' begins] " + ChannelHistory + f" [Chat log for channel '{message.channel.name}' ends]" + History
         if DuckDuckGoSearch:
+            WebResults = "[Use this internet data to help you respond] " + WebResults
             max_results = 0
             if not TriggerWordRequiredForSearch:
                 max_results = DuckDuckGoMaxSearchResults
@@ -213,7 +223,7 @@ async def bot_answer(message):
                     DDGSearchResults = DDGS().text(DDQSearchQuery, 
                                 max_results=max_results, safesearch='off', region='us-en', backend='api')
                     DDGSearchResultsList = [
-                        f"[Web Link {i+1} | {result['title']} | {result['href']} | {result['body']}]"
+                        f"[{result['href']} | {result['body']}]"
                         for i, result in enumerate(DDGSearchResults)
                     ]
                     DDGSearchResultsString = '\n'.join(DDGSearchResultsList)
@@ -225,27 +235,40 @@ async def bot_answer(message):
                 except DuckDuckGoSearchException as e:
                     print(f"An error occurred while searching: {e}")
                     pass
-            if AllowWikipediaExtracts:
-                WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s]+)', message.content + " " + DDGSearchResultsString)
-                if WikipediaLinks:
-                    for WikipediaLink in WikipediaLinks:
-                        if MessageDebug:
-                            print(f"Wikipedia Link found: {WikipediaLink}")
-                        try:
-                            search_results = wikipedia.search(WikipediaLink)
-                            if search_results:
-                                top_result = search_results[0]
-                                WikipediaPage = wikipedia.page(top_result).content[:WikipediaExtractLength]
-                                WebResults = f"[{WikipediaPage}]" + WebResults
-                                if MessageDebug:
-                                    print(f"Wikipedia Page extracted: {top_result}")
-                                    print(f"Wikipedia Page Content {WikipediaPage}\n____________________")
-                            else:
-                                print(f"No Wikipedia results found for: {WikipediaLink}")
-                        except wikipedia.exceptions.PageError as e:
-                            print(f"Wikipedia Page Error: {e}")
-                            pass
-        WebResults = f"[Current UTC Unix time: {int(time.time())}]" + WebResults
+        if AllowWebpageScraping:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            }
+            WebLinks = re.findall(r'(https?://\S+)', message.content + " " + DDGSearchResultsString)
+            threads = []
+            for WebLink in WebLinks:
+                if "wikipedia.org" not in WebLink:
+                    if MessageDebug:
+                        print(f"Web Link found: {WebLink}")
+                    thread = threading.Thread(target=functions.scrape_webpage, args=(WebLink, WebResults))
+                    threads.append(thread)
+                    thread.start()
+            
+            # Wait for all threads to complete
+            for thread in threads:
+                thread.join()
+        if AllowWikipediaExtracts:
+            WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s]+)', message.content + " " + DDGSearchResultsString)
+            if WikipediaLinks:
+                threads = []
+                for WikipediaLink in WikipediaLinks:
+                    if MessageDebug:
+                        print(f"Wikipedia Link found: {WikipediaLink}")
+                    thread = threading.Thread(target=functions.extract_wikipedia_page, args=(WikipediaLink, WebResults))
+                    threads.append(thread)
+                    thread.start()
+                
+                # Wait for all threads to complete
+                for thread in threads:
+                    thread.join()
+
+        WebResults = WebResults + "[End of Web Results]"
+        WebResults = f"[Current UTC Unix time: {int(time.time())}]"
         Memory = Memory or "";History = History or "";WebResults = WebResults or "";DDGSearchResultsString = DDGSearchResultsString or ""
         image_request = functions.check_for_image_request(user_input)
         if GenerateImageOnly and image_request:
@@ -518,7 +541,7 @@ async def send_to_user_queue():
         else:
             await send_large_message(reply["content"]["message"], reply["response"])
         # Update reactions after message has been sent
-        reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
+        await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
@@ -751,7 +774,7 @@ async def view_configuration(interaction):
     # SpecificGuildMode, SpecificGuildModeIDs, SpecificGuildModeNames, SpecificChannelMode, SpecificChannelModeIDs, SpecificChannelModeNames
     await interaction.response.send_message(
         "The bot's current configuration is as follows:\n" + 
-        "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx"+str(ResponseMaxLength*3)+"~"+str(ResponseMaxLength*4)+"characters)"  + "\n" +
+        "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx "+str(ResponseMaxLength*3)+"~"+str(ResponseMaxLength*4)+" characters)"  + "\n" +
         "Guild Memory (characters): " + str(GuildMemoryAmount) + "\n" +
         "Channel Memory (characters): " + str(ChannelMemoryAmount) + "\n" +
         "User Memory (characters): " + str(UserMemoryAmount) + "\n" +
@@ -761,7 +784,8 @@ async def view_configuration(interaction):
         "UserRateLimitSeconds: " + str(UserRateLimitSeconds) + "\n" +
         "Reply to Bots: " + str(ReplyToBots) + "\n" +
         "Mention or Reply Required: " + str(MentionOrReplyRequired) + "\n" +
-        "Wikipedia Link Extracting?: " + str(AllowWikipediaExtracts) + "\n" +
+        "Wikipedia Extracting?: " + str(AllowWikipediaExtracts) + "\n" +
+        "Webpage Scraping?: " + str(AllowWebpageScraping) + "\n" +
         "Specific Guilds?: " + str(SpecificGuildMode) + " | " +
         str(SpecificGuildModeIDs) + str(SpecificGuildModeNames) + "\n" +
         "Specific Channels?: " + str(SpecificChannelMode) + " | " +

@@ -52,16 +52,20 @@ DuckDuckGoMaxSearchResults = 5 # set to the maximum number of search results to 
 DuckDuckGoMaxSearchResultsWithParams = 15 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
 AllowWikipediaExtracts = True # set to True to allow the bot to fetch summaries from Wikipedia articles
 WikipediaExtractLength = 500 # set to the maximum number of characters to fetch from a Wikipedia article
+AllowWebpageScraping = True # set to True to allow the bot to scrape webpages for information
+WebpageScrapeLength = 500 # set to the maximum number of characters to scrape from a webpage
 
 TriggerWordRequiredForSearch = True # set to True to require a synonym of (Who/What/Why/When/Where/Search) be in the prompt for a search to be performed
 
-SingleChannelMode = False # set to True to only track and reply messages from a single channel
-SingleChannelModeID = "" # set to the desired channel ID if singleChannelMode is True
-SingleChannelModeName = "" # set to the desired channel name if singleChannelMode is True
+SpecificChannelMode = False # set to True to only track and reply messages from a single channel
+SpecificChannelModeIDs = [] # set to the desired channel ID if singleChannelMode is True
+SpecificChannelModeNames = [] # set to the desired channel name if singleChannelMode is True
 
-SingleGuildMode = False # set to True to only track and reply messages from a single guild (server)
-SingleGuildModeID = "" # set to the desired channel ID if SingleGuildMode is True
-SingleGuildModeName = "" # set to the desired channel name if SingleGuildMode is True
+SpecificGuildMode = False # set to True to only track and reply messages from a single guild (server)
+SpecificGuildModeIDs = [] # set to the desired channel ID if SingleGuildMode is True
+SpecificGuildModeNames = [] # set to the desired channel name if SingleGuildMode is True
+
+GenerateImageOnly = True # set to True to only generate images, not text
 
 # Not yet implemented
 #KeepLogFilesPruned = False # set to True to keep log files pruned to a certain size
