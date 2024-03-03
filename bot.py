@@ -55,20 +55,6 @@ def custom_print(*args, **kwargs):
 builtins.print = custom_print
 
 async def bot_behavior(message):
-    if LogAllMessagesToChannelHistory:
-        # Log the message to the channel history
-        if message.guild:
-            await functions.add_to_channel_history(
-                message.guild, message.channel, message.author, message.content
-            )
-
-    if LogAllMessagesToUserHistory:
-        # Log the message to the channel history
-        if message.guild:
-            await functions.add_to_channel_history(
-                message.guild, message.channel, message.author, message.content
-            )
-
     if MessageDebug:
         print('_________v_CHAT MESSAGE_v_________')
         if message.channel:
@@ -79,8 +65,22 @@ async def bot_behavior(message):
                 MessageChannel = message.channel.name
                 MessageGuild = message.guild.name
         print(MessageGuild + " | " + MessageChannel + " | " + message.author.name + ": " + message.content)
-    
-    # If the message is from a blocked user, don't respond
+    if LogAllMessagesToChannelHistory:
+        # Log the message to the channel history
+        if message.guild:
+            await functions.add_to_channel_history(
+                message.guild, message.channel, message.author, message.content
+            )
+            print(f"Added message to '{ContextFolderLocation}context\\guilds\\{message.guild.name}\\{message.channel.name}.txt'")
+    if LogAllMessagesToUserHistory:
+        # Log the message to the channel history
+        if message.guild:
+            await functions.add_to_user_history(
+                message.content, message.author
+            )
+            print(f"Added message to '{ContextFolderLocation}context\\users\\{message.author.name}.txt")
+
+    # Check if the author is blocked
     if (message.author.id in BlockedUsers or message.author.name in BlockedUsers):
         if MessageDebug:
             print("No Response: Blocked user")
@@ -106,9 +106,9 @@ async def bot_behavior(message):
 
     # If the message starts with a symbol, don't respond.
     if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", ":", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
-            if MessageDebug:
-                print("No Response: IgnoreSymbols is True and message starts with a symbol")
-            return False
+        if MessageDebug:
+            print("No Response: IgnoreSymbols is True and message starts with a symbol")
+        return False
 
     if message.guild is None:
         if AllowDirectMessages:
@@ -122,13 +122,13 @@ async def bot_behavior(message):
     # Check if the bot is in specific guild mode - if it is, check if the message is from the correct guild
     if SpecificGuildMode and not (message.guild.id in SpecificGuildModeIDs or message.guild.name in SpecificGuildModeNames):
         if MessageDebug:
-            print(f"No Response: Guild id ({message.guild.id}) or name ({message.guild.name}) does not match ({SpecificGuildModeIDs}) or ({SpecificGuildModeNames})")
+            print(f"No Response: Guild ({message.guild.id})/({message.guild.name}) no in ({SpecificGuildModeIDs})/({SpecificGuildModeNames})")
         return False
 
     # Check if the bot is in specific channel mode - if it is, check if the message is from the correct channel
     if SpecificChannelMode and not (message.channel.id in SpecificChannelModeIDs or message.channel.name in SpecificChannelModeNames):
         if MessageDebug:
-            print(f"No Response: Channel id ({message.channel.id}) or name ({message.channel.name}) does not match ({SpecificChannelModeIDs}) or ({SpecificChannelModeNames})")
+            print(f"No Response: Channel ({message.channel.id})/({message.channel.name}) not in ({SpecificChannelModeIDs})/({SpecificChannelModeNames})")
         return False
 
     # Check if mentions are required to trigger the bot    
@@ -204,7 +204,10 @@ async def bot_answer(message):
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             Memory =  GuildMemory + Memory
         if UseUserHistory:
-            UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
+            if isinstance(message.channel, discord.DMChannel) and UserHistoryAmountifDM:
+                UserHistory = str(await functions.get_user_history(user, UserHistoryAmountifDM))
+            else:
+                UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
             History = UserHistory + History
         if UseChannelHistory and message.guild:
             if ChannelHistoryOverride:
@@ -255,7 +258,7 @@ async def bot_answer(message):
                 if "wikipedia.org" not in WebLinkDecoded and "fandom.com" not in WebLinkDecoded:
                     try:
                         RelevantParagraphs = []
-                        response = requests.get(WebLinkDecoded, headers=WebScrapeHeaders, timeout=5)
+                        response = requests.get(WebLinkDecoded, headers=WebScrapeHeaders)
                         soup = BeautifulSoup(response.text, 'html.parser')
                         # Find all <p> tags
                         paragraphs = soup.find_all('p')
@@ -286,10 +289,10 @@ async def bot_answer(message):
                     RelevantSentencesTrimmed = ""
                     WikipediaLinkDecoded = unquote(WikipediaLink)
                     try:
-                        search_results = wikipedia.search(WikipediaLinkDecoded, timeout=5)
+                        search_results = wikipedia.search(WikipediaLinkDecoded)
                         if search_results:
                             top_result = search_results[0]
-                            WikipediaPage = wikipedia.page(top_result, timeout=5)
+                            WikipediaPage = wikipedia.page(top_result)
                             WikipediaPageSentences = WikipediaPage.content.split('. ')
                             WikipediaPageSentencesArray = [sentence.strip() for sentence in WikipediaPageSentences]
                             RelevantSentences = []
@@ -312,33 +315,33 @@ async def bot_answer(message):
         if AllowFandomExtracts:
             FandomLinks = re.findall(r'fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
             if FandomLinks:
+                RelevantSentencesTrimmed = ""
                 for FandomLink in FandomLinks:
-                    RelevantSentencesTrimmed = ""
                     FandomLinkDecoded = unquote(FandomLink)
                     try:
-                        search_results = fandom.search(FandomLinkDecoded, timeout=5)
+                        search_results = fandom.search(FandomLinkDecoded)
                         if search_results:
                             top_result = search_results[0]
-                            FandomPage = fandom.page(top_result, timeout=5)
+                            FandomPage = fandom.page(top_result)
                             FandomPageSentences = FandomPage.content.split('. ')
                             FandomPageSentencesArray = [sentence.strip() for sentence in FandomPageSentences]
                             RelevantSentences = []
                             for sentence in FandomPageSentencesArray:
                                 similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                                if similarity >= 0.2:  # Adjust the threshold as needed
-                                    if MessageDebug:
-                                        print(f"Similarity: {similarity} | {sentence}")
-                                    RelevantSentences.append(sentence)
-                                    if sum(len(sentence) for sentence in RelevantSentences) >= FandomExtractLength:
-                                        break
+                            if similarity >= 0.2:  # Adjust the threshold as needed
+                                if MessageDebug:
+                                    print(f"Similarity: {similarity} | {sentence}")
+                                RelevantSentences.append(sentence)
+                                if sum(len(sentence) for sentence in RelevantSentences) >= FandomExtractLength:
+                                    break
                             if MessageDebug:
                                 print(f"[Fandom: {FandomLinkDecoded} | {str(RelevantSentencesTrimmed)}]")
                             WebResults = WebResults + f"[Fandom: {FandomLinkDecoded} | {str(RelevantSentencesTrimmed)}]"
                         else:
                             print(f"No Fandom results found for: {FandomLinkDecoded}")
-                    except (fandom.exceptions.PageError, fandom.exceptions.DisambiguationError) as e:
-                        print(f"Fandom Error: {e}")
-                pass
+                    except Exception as e:
+                        print(f"An error occurred while extracting from Fandom: {e}")
+            pass
         WebResults = WebResults + "[End of Web Results]"
         WebResults = f"[Current UTC Unix time: {int(time.time())}][Current UTC time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]" + WebResults
         Memory = Memory or "";History = History or "";WebResults = WebResults or "";DDGSearchResultsString = DDGSearchResultsString or ""
@@ -492,13 +495,12 @@ async def send_to_model_queue():
     while True:
         # Get the queue item that's next in the list
         content = await queue_to_process_message.get()
-        # Add the message to the user's history
-        await functions.add_to_user_history(
-            content["user_input"],
-            content["UserName"],
-            content["UserName"],
-            content["user"],
-        )
+        # Add the message to the user's history - But check if LogAllMessagesToUserHistory is enabled first so we don't save it twice.
+        if not LogAllMessagesToUserHistory:
+            await functions.add_to_user_history(
+                content["user_input"],
+                content["User"]
+            )
         # Log the API request
         await functions.write_to_log(
             f"Sending API request to LLM model: {content['prompt']}"
@@ -610,9 +612,7 @@ async def send_to_user_queue():
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
-            character_card["name"],
-            reply["content"]["UserName"],
-            reply["content"]["user"],
+            reply["content"]["user"]
         )
         queue_to_send_message.task_done()
         await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
@@ -704,7 +704,7 @@ async def reset_history(interaction):
     UserName = str(interaction.user.name)
     UserName = UserName.replace(" ", "")
 
-    file_name = functions.get_file_name(UserContextLocation, str(user.name) + ".txt")
+    file_name = functions.get_file_name(ContextLocation, str(user.name) + ".txt")
 
     # Attempt to remove or rename the file based on the condition
     try:
@@ -741,7 +741,7 @@ async def view_history(interaction):
     UserName = interaction.user.name
     UserName = UserName.replace(" ", "")
 
-    file_name = functions.get_file_name(UserContextLocation, str(user.name) + ".txt")
+    file_name = functions.get_file_name(ContextLocation, str(user.name) + ".txt")
 
     try:
         with open(
@@ -916,7 +916,6 @@ async def parameter_select_callback(interaction):
         interaction.user.name + " updated the bot's sampler parameters. " + api_check
     )
 
-global last_message
 
 @client.event
 async def on_message(message):
