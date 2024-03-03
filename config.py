@@ -9,6 +9,7 @@ MessageDebug = False # True/False: print out how every message is processed
 # Context Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
 UseUserHistory = True # True/False: enable user history
 UserHistoryAmount = 6000
+UserContextLocation = "context\\users"
 
 UseChannelHistory = False # True/False: enable channel history (Multi-user mode)
 ChannelHistoryAmount = 6000
@@ -33,7 +34,8 @@ AllowBotToMention = False # True/False: allow the bot to mention (ping) users in
 UserRateLimitSeconds = 10 # set to the number of seconds to wait the same user is allowed to submit a prompt
 RateLimitedEmoji = "⏳" # set to the emoji that the bot will react with when a user is rate limited
 
-LogMessagesToChannelHistory = False # True/False: log all messages to a file
+LogAllMessagesToUserHistory = False # True/False: to log all messages to a file
+LogAllMessagesToChannelHistory = False # True/False: to log all messages to a file
 AddTimestamp = False # True/False: add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model
 LogNoTextUploads = False # True/False: log messages without text content as <media>
 
@@ -52,6 +54,8 @@ DuckDuckGoMaxSearchResults = 4 # set to the maximum number of search results to 
 DuckDuckGoMaxSearchResultsWithParams = 9 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
 AllowWikipediaExtracts = True # True/False: allow the bot to fetch summaries from Wikipedia articles
 WikipediaExtractLength = 500 # set to the maximum number of characters to fetch from a Wikipedia article
+AllowFandomExtracts = True # True/False: allow the bot to fetch summaries from Fandom.com articles
+FandomExtractLength = 2000 # set to the maximum number of characters to fetch from a Fandom.com article
 AllowWebpageScraping = True # True/False: allow the bot to scrape webpages for information
 WebpageScrapeLength = 500 # set to the maximum number of characters to scrape from a webpage
 
