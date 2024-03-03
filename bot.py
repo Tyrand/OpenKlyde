@@ -1,4 +1,3 @@
-
 import aiohttp
 import asyncio
 import config
@@ -15,6 +14,7 @@ import profanity_check
 import random
 import requests
 import wikipedia
+import fandom
 from bs4 import BeautifulSoup
 import re
 from aiohttp import ClientSession
@@ -74,18 +74,21 @@ async def bot_behavior(message):
         print(MessageGuild + " | " + MessageChannel + " | " + message.author.name + ": " + message.content)
     
     # If the message is from a blocked user, don't respond
-    if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
+    if (message.author.id in BlockedUsers or message.author.name in BlockedUsers):
         if MessageDebug:
             print("No Response: Blocked user")
         return False
 
-    # Don't respond to yourself or other bots unless specified
-    if (
-        message.author == client.user
-        or message.author.bot and not ReplyToBots
-    ):
+    # Don't respond to yourself
+    if (message.author == client.user):
         if MessageDebug:
-            print("No Response: Self or other bot")
+            print("No Response: Self")
+        return False
+    
+    # Don't respond to other bots
+    if (message.author.bot and not ReplyToBots):
+        if MessageDebug:
+            print("No Response: Bot")
         return False
     
     # If the message is empty, don't respond
@@ -93,7 +96,6 @@ async def bot_behavior(message):
         if MessageDebug:
             print("No Response: Empty message")
         return False
-
 
     # If the message starts with a symbol, don't respond.
     if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", ":", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
@@ -243,7 +245,7 @@ async def bot_answer(message):
             for WebLink in WebLinks:
                 WebLinkDecoded = ""
                 WebLinkDecoded = unquote(WebLink)
-                if "wikipedia.org" not in WebLinkDecoded:
+                if "wikipedia.org" not in WebLinkDecoded and "fandom.com" not in WebLinkDecoded:
                     try:
                         RelevantParagraphs = []
                         response = requests.get(WebLinkDecoded, headers=WebScrapeHeaders, timeout=5)
@@ -262,7 +264,7 @@ async def bot_answer(message):
                                 if MessageDebug:
                                     print(f"Similarity: {similarity} | {p_text}")
                                 RelevantParagraphs.append(p_text)
-                            if sum(len(paragraph) for paragraph in RelevantParagraphs) >= 500:
+                            if sum(len(paragraph) for paragraph in RelevantParagraphs) >= WebpageScrapeLength:
                                 break
                         WebResults = WebResults + f"[Webpage: {WebLinkDecoded} | {RelevantParagraphs}]"
                         if MessageDebug:
@@ -270,7 +272,6 @@ async def bot_answer(message):
                     except (requests.exceptions.RequestException, Exception) as e:
                         print(f"An error occurred while scraping webpage: {e}")
                     pass
-
         if AllowWikipediaExtracts:
             WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
             if WikipediaLinks:
@@ -291,7 +292,7 @@ async def bot_answer(message):
                                     if MessageDebug:
                                         print(f"Similarity: {similarity} | {sentence}")
                                     RelevantSentences.append(sentence)
-                                    if sum(len(sentence) for sentence in RelevantSentences) >= 500:
+                                    if sum(len(sentence) for sentence in RelevantSentences) >= WikipediaExtractLength:
                                         break
                             if MessageDebug:
                                 print(f"[Wikipedia: {WikipediaLinkDecoded} | {str(RelevantSentencesTrimmed)}]")
@@ -301,7 +302,36 @@ async def bot_answer(message):
                     except (wikipedia.exceptions.PageError, wikipedia.exceptions.DisambiguationError) as e:
                         print(f"Wikipedia Error: {e}")
                 pass
-
+        if AllowFandomExtracts:
+            FandomLinks = re.findall(r'fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
+            if FandomLinks:
+                for FandomLink in FandomLinks:
+                    RelevantSentencesTrimmed = ""
+                    FandomLinkDecoded = unquote(FandomLink)
+                    try:
+                        search_results = fandom.search(FandomLinkDecoded)
+                        if search_results:
+                            top_result = search_results[0]
+                            FandomPage = fandom.page(top_result)
+                            FandomPageSentences = FandomPage.content.split('. ')
+                            FandomPageSentencesArray = [sentence.strip() for sentence in FandomPageSentences]
+                            RelevantSentences = []
+                            for sentence in FandomPageSentencesArray:
+                                similarity = SequenceMatcher(None, sentence, message.content).ratio()
+                                if similarity >= 0.25:  # Adjust the threshold as needed
+                                    if MessageDebug:
+                                        print(f"Similarity: {similarity} | {sentence}")
+                                    RelevantSentences.append(sentence)
+                                    if sum(len(sentence) for sentence in RelevantSentences) >= FandomExtractLength:
+                                        break
+                            if MessageDebug:
+                                print(f"[Fandom: {FandomLinkDecoded} | {str(RelevantSentencesTrimmed)}]")
+                            WebResults = WebResults + f"[Fandom: {FandomLinkDecoded} | {str(RelevantSentencesTrimmed)}]"
+                        else:
+                            print(f"No Fandom results found for: {FandomLinkDecoded}")
+                    except (fandom.exceptions.PageError, fandom.exceptions.DisambiguationError) as e:
+                        print(f"Fandom Error: {e}")
+                pass
         WebResults = WebResults + "[End of Web Results]"
         WebResults = f"[Current UTC Unix time: {int(time.time())}][Current UTC time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]" + WebResults
         Memory = Memory or "";History = History or "";WebResults = WebResults or "";DDGSearchResultsString = DDGSearchResultsString or ""
@@ -343,6 +373,7 @@ async def bot_answer(message):
         "BotDisplayName": client.user.display_name,
         "image": image_request,
     }
+
     queue_to_process_message.put_nowait(queue_item)
     # Toggle the typing status to the channel so the user knows we're working on it
     await start_typing_status(message)
@@ -416,7 +447,6 @@ async def handle_llm_response(content, response):
             "Invalid JSON response from LLM model: " + str(response)
         )
 
-
 def extract_data_from_response(llm_response):
     try:
         return llm_response["results"][0]["text"]
@@ -425,6 +455,30 @@ def extract_data_from_response(llm_response):
             return llm_response["choices"][0]["text"]
         except (KeyError, IndexError):
             return ""  # Return an empty string if data extraction fails
+async def send_api_request(session, url, headers, data):
+    async with session.post(url, headers=headers, data=data) as response:
+        return await response.json()
+
+async def is_valid_response(response_text):
+    # Define the pattern to search for
+    Pattern_EmptyMessage = r'[@<>\[\]]'
+    Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
+    Pattern_CharacterName = r'^@'+re.escape(content['UserName'])+r'$'
+    Pattern_DisplayName = r'^@'+re.escape(content['BotDisplayName'])+r'$'
+
+    # Check if the response text matches the pattern
+    if (
+        response_text.strip() is None or response_text.strip() == ""
+        or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE)
+        or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
+    ):
+        return False
+    if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
+        return False
+    return True
 
 async def send_to_model_queue():
     global text_api
@@ -446,58 +500,26 @@ async def send_to_model_queue():
             retry_count = 0
             while retry_count < 5:
                 try:
-                    async with session.post(
+                    response_data = await send_api_request(
+                        session,
                         text_api["address"] + text_api["generation"],
-                        headers=text_api["headers"],
-                        data=content["prompt"],
-                    ) as response:
-                        response_data = await response.json()
-                        # Log the API response
-                        await functions.write_to_log(
-                            f"Received API response from LLM model: {response_data}"
-                        )
-                        response_text = response_data["results"][0]["text"]
-                        if BadResponseSafeGuards:
-                            # Define the pattern to search for
-                            Pattern_EmptyMessage = r'[@<>\[\]]'
-                            Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
-                            Pattern_CharacterName = r'^@'+re.escape(content['UserName'])+r'$'
-                            Pattern_DisplayName = r'^@'+re.escape(content['BotDisplayName'])+r'$'
-
-                            # Check if the response text matches the pattern
-                            if (
-                                response_text.strip() is None or response_text.strip() == ""
-                                or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
-                                or re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE)
-                                or re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE)
-                                or re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE)
-                                or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
-                            ):
-                                # Print the reason for catching the response
-                                if response_text.strip() is None or response_text.strip() == "":
-                                    print("Empty message caught")
-                                elif re.search(Pattern_EmptyMessage, response_text[:16]):
-                                    print("Possible username caught:", response_text)
-                                elif re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE):
-                                    print("Character name caught:", response_text)
-                                elif re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE):
-                                    print("User name caught:", response_text)
-                                elif re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE):
-                                    print("Bot display name caught:", response_text)
-                                elif re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE):
-                                    print("Chat log caught:", response_text)
-                            if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
-                                # Retry by continuing the loop
-                                retry_count += 1
-                                continue
-                            # Send the response to the next step
-                            await handle_llm_response(content, response_data)
-                            queue_to_process_message.task_done()
-                            break
-                        # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
-                        await asyncio.sleep(
-                            1
-                        )  # Add a delay to avoid excessive API requests (in seconds)
+                        text_api["headers"],
+                        content["prompt"],
+                    )
+                    # Log the API response
+                    await functions.write_to_log(
+                        f"Received API response from LLM model: {response_data}"
+                    )
+                    response_text = response_data["results"][0]["text"]
+                    if is_valid_response(response_text):
+                        # Send the response to the next step
+                        await handle_llm_response(content, response_data)
+                        queue_to_process_message.task_done()
+                        break
+                    # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
+                    await asyncio.sleep(
+                        1
+                    )  # Add a delay to avoid excessive API requests (in seconds)
                 except Exception as e:
                     print(f"Error occurred: {e}")
                     retry_count += 1
@@ -805,11 +827,11 @@ async def view_configuration(interaction):
 
     # List the current configuration settings
     # Settings listed are: ResponseMaxLength, GuildMemoryAmount, ChannelMemoryAmount, UserMemoryAmount, ChannelHistoryAmount,
-    # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowWikipediaExtracts,
+    # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowFandomExtracts,
     # SpecificGuildMode, SpecificGuildModeIDs, SpecificGuildModeNames, SpecificChannelMode, SpecificChannelModeIDs, SpecificChannelModeNames
     await interaction.response.send_message(
         "The bot's current configuration is as follows:\n" + 
-        "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx "+str(ResponseMaxLength*3)+"~"+str(ResponseMaxLength*4)+" characters)"  + "\n" +
+        "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx "+str(ResponseMaxLength*3)+" ~ "+str(ResponseMaxLength*4)+" characters)"  + "\n" +
         "Guild Memory (characters): " + str(GuildMemoryAmount) + "\n" +
         "Channel Memory (characters): " + str(ChannelMemoryAmount) + "\n" +
         "User Memory (characters): " + str(UserMemoryAmount) + "\n" +
@@ -819,11 +841,11 @@ async def view_configuration(interaction):
         "UserRateLimitSeconds: " + str(UserRateLimitSeconds) + "\n" +
         "Reply to Bots: " + str(ReplyToBots) + "\n" +
         "Mention or Reply Required: " + str(MentionOrReplyRequired) + "\n" +
-        "Wikipedia Extracting?: " + str(AllowWikipediaExtracts) + "\n" +
-        "Webpage Scraping?: " + str(AllowWebpageScraping) + "\n" +
-        "Specific Guilds?: " + str(SpecificGuildMode) + " | " +
+        "Wikipedia Extracting: " + str(AllowWikipediaExtracts) + "\n" +
+        "Webpage Scraping: " + str(AllowWebpageScraping) + "\n" +
+        "Specific Guilds: " + str(SpecificGuildMode) + " | " +
         str(SpecificGuildModeIDs) + str(SpecificGuildModeNames) + "\n" +
-        "Specific Channels?: " + str(SpecificChannelMode) + " | " +
+        "Specific Channels: " + str(SpecificChannelMode) + " | " +
         str(SpecificChannelModeIDs) + str(SpecificChannelModeNames) + "\n"
     )
 
@@ -885,8 +907,6 @@ async def parameter_select_callback(interaction):
     await interaction.followup.send(
         interaction.user.name + " updated the bot's sampler parameters. " + api_check
     )
-
-UserContextLocation = "context\\users"
 
 global last_message
 
