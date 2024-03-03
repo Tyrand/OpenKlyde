@@ -9,7 +9,47 @@ from io import BytesIO
 import datetime
 from datetime import datetime
 from config import *
+from bs4 import BeautifulSoup
+import wikipedia
 
+def scrape_webpage(WebLink, WebResults):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    try:
+        response = requests.get(WebLink, headers=headers, timeout=5)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # Remove script and style tags
+        for script in soup(["script", "style"]):
+            script.extract()
+        # Get the plain text
+        WebLinkText = soup.get_text()
+        # Remove leading and trailing white spaces
+        WebLinkText = WebLinkText.strip()
+        # Remove extra white spaces and newlines
+        WebLinkText = re.sub('\s+', ' ', WebLinkText)
+        WebLinkTextTrimmed = WebLinkText[:WebpageScrapeLength]
+        WebResults += f"[{WebLink} | {WebLinkTextTrimmed}]"
+        if MessageDebug:
+            print(f"Webpage scraped: {WebLink} | {WebLinkTextTrimmed}\n____________________")
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred while scraping webpage: {e}")
+def extract_wikipedia_page(WikipediaLink, WebResults):
+    try:
+        search_results = wikipedia.search(WikipediaLink)
+        if search_results:
+            top_result = search_results[0]
+            WikipediaPage = wikipedia.page(top_result).content
+            WikipediaPageTrimmed = WikipediaPage[:WikipediaExtractLength]
+            WebResults = f"[{WikipediaPageTrimmed}]" + WebResults
+            if MessageDebug:
+                print(f"Wikipedia Page extracted: {top_result}")
+                print(f"Wikipedia Page Content {WikipediaPageTrimmed}\n____________________")
+        else:
+            print(f"No Wikipedia results found for: {WikipediaLink}")
+    except wikipedia.exceptions.PageError as e:
+        print(f"Wikipedia Page Error: {e}")
+        pass
 async def set_api(config_file):
     # Set API struct from JSON file
     file = get_file_name("configurations", config_file)
@@ -64,10 +104,10 @@ def check_for_image_request(user_message):
     return bool(pattern.search(user_message))
 
 async def create_text_prompt(
-    user_input, user, character, bot, memory, history, reply, text_api
+    user_input, user, character, bot, memory, history, WebResults, reply, text_api
 ):
     # Create a text prompt for text generation
-    prompt = f"{character}{memory}{history}{reply}{user.name}: {user_input}\n{bot}: "
+    prompt = f"{character}{memory}{history}{WebResults}{reply}{user.name}: {user_input}\n{bot}: "
     # stop_sequence = [f"{user.name}:", f"{bot}:", "You:"]
     stop_sequence = [f"{user.name}:", f"{bot}:", f"@{bot}", "You:"]
     data = text_api["parameters"]

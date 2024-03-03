@@ -48,8 +48,8 @@ ProfanityRating = 1 # set the minimum rating for a prompt to pass the profanity 
 ProfanityEmoji = "🤬" # set to the emoji that the bot will react with when a prompt is denied for profanity
 
 DuckDuckGoSearch = True # set to True to allow the bot to fetch search results from DuckDuckGo and use them to improve responses
-DuckDuckGoMaxSearchResults = 5 # set to the maximum number of search results to fetch from DuckDuckGo
-DuckDuckGoMaxSearchResultsWithParams = 15 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
+DuckDuckGoMaxSearchResults = 4 # set to the maximum number of search results to fetch from DuckDuckGo
+DuckDuckGoMaxSearchResultsWithParams = 9 # set to the maximum number of search results to fetch from DuckDuckGo when using search parameters
 AllowWikipediaExtracts = True # set to True to allow the bot to fetch summaries from Wikipedia articles
 WikipediaExtractLength = 500 # set to the maximum number of characters to fetch from a Wikipedia article
 AllowWebpageScraping = True # set to True to allow the bot to scrape webpages for information
