@@ -193,7 +193,7 @@ async def get_channel_memory(GuildName, ChannelName, characters):
 
 async def get_channel_history(GuildName, ChannelName, characters):
     # Get channel conversation history
-    file_path = get_file_name(f"context\\guilds\\{GuildName}", f"{ChannelName}.txt")
+    file_path = get_file_name(f"{ContextFolderLocation}\\context\\guilds\\{GuildName}", f"{ChannelName}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -225,7 +225,7 @@ async def get_channel_history(GuildName, ChannelName, characters):
 
 async def get_user_history(user, characters):
     # Get user's conversation history
-    file_path = get_file_name("context\\users", f"{user.name}.txt")
+    file_path = get_file_name(f"{ContextFolderLocation}\\context\\users", f"{user.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -256,22 +256,22 @@ async def get_user_history(user, characters):
         )
         return None, 0
 
-async def add_to_user_history(content, UserName, file, user):
+async def add_to_user_history(content, user):
     # Add message to user's conversation history
-    file_name = get_file_name("context\\users", f"{user.name}.txt")
+    file_name = get_file_name(f"{ContextFolderLocation}\\context\\users", f"{user.name}.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if AddTimestamp:
-        message = f"{timestamp} {UserName}: {content}\n"
+        message = f"{timestamp} {user.name}: {content}\n"
     else:
-        message = f"{UserName}: {content}\n"
+        message = f"{user.name}: {content}\n"
     if content is not None:
         await append_text_file(file_name, message)
 
 async def add_to_channel_history(guild, channel, user, content):
     # Add message to channel's conversation history
-    file_name = get_file_name("context\\guilds\\" + guild.name, f"{channel.name}.txt")
+    file_name = get_file_name(f"{ContextFolderLocation}\\context\\guilds\\{guild.name}", f"{channel.name}.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

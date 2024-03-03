@@ -8,8 +8,11 @@ MessageDebug = False # True/False: print out how every message is processed
 
 # Context Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
 UseUserHistory = True # True/False: enable user history
-UserHistoryAmount = 6000
-UserContextLocation = "context\\users"
+UserHistoryAmount = 4000
+UserHistoryAmountifDM = 8000 # set to 0 to use the same amount as UserHistoryAmount
+ContextFolderLocation = "" # set to the location of the user history files context\\users\\{username}.txt
+if ContextFolderLocation != "":
+    ContextFolderLocation = ContextFolderLocation + "\\"
 
 UseChannelHistory = False # True/False: enable channel history (Multi-user mode)
 ChannelHistoryAmount = 6000
