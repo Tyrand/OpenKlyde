@@ -7,6 +7,7 @@ import discord
 import duckduckgo_search
 import functions
 import httpx
+from urllib.parse import unquote
 import importlib
 import json
 import os
@@ -26,6 +27,7 @@ from profanity_check import predict, predict_prob
 import time
 import threading
 import builtins
+from difflib import SequenceMatcher
 
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix="$", intents=intents)
@@ -61,7 +63,7 @@ async def bot_behavior(message):
             )
 
     if MessageDebug:
-        print('____________________')
+        print('_________v_CHAT MESSAGE_v_________')
         if message.channel:
             if isinstance(message.channel, discord.DMChannel):
                 MessageChannel = "DM"
@@ -69,7 +71,7 @@ async def bot_behavior(message):
             else:
                 MessageChannel = message.channel.name
                 MessageGuild = message.guild.name
-        print(MessageGuild + " > " + MessageChannel + " | " + message.author.name + ": " + message.content)
+        print(MessageGuild + " | " + MessageChannel + " | " + message.author.name + ": " + message.content)
     
     # If the message is from a blocked user, don't respond
     if ( message.author.id in BlockedUsers or message.author.name in BlockedUsers ):
@@ -140,7 +142,7 @@ async def bot_answer(message):
         last_time = last_message_time[message.author.id]
         if current_time - last_time < UserRateLimitSeconds:
             # Ignore rate limit if user is admin
-            if (message.guild and message.author.guild_permissions.administrator) or message.author.id in DiscordAccountIDs:
+            if (message.guild and message.author.guild_permissions.administrator) or (message.author.id in DiscordAccounts or message.author.name in DiscordAccounts):
                 return True
             await message.add_reaction(RateLimitedEmoji)
             if MessageDebug:
@@ -166,6 +168,7 @@ async def bot_answer(message):
     History = ""
     WebResults = ""
     DDGSearchResultsString = ""
+    WebResults = "[Use this internet data to help you respond] " + WebResults
     user_input = functions.clean_user_message(client,message.clean_content)
     if isinstance(message.channel, discord.TextChannel):
         print(f"{message.channel.name} | {UserName}: {user_input}")
@@ -176,7 +179,7 @@ async def bot_answer(message):
     # Is this an image request?
     image_request = functions.check_for_image_request(user_input)
     character = functions.get_character(character_card)
-    if image_request and (message.author.id in DiscordAccountIDs):
+    if image_request and (message.author.id in DiscordAccounts or message.author.name in DiscordAccounts):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
@@ -202,12 +205,11 @@ async def bot_answer(message):
             ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
             History = f"[Chat log for channel '{message.channel.name}' begins] " + ChannelHistory + f" [Chat log for channel '{message.channel.name}' ends]" + History
         if DuckDuckGoSearch:
-            WebResults = "[Use this internet data to help you respond] " + WebResults
             max_results = 0
             if not TriggerWordRequiredForSearch:
                 max_results = DuckDuckGoMaxSearchResults
             elif TriggerWordRequiredForSearch:
-                    if any(word in message.content.lower() for word in ["who", "what", "why", "when", "where", "search", "google", "bing", "how", "which", "find", "info"]):
+                    if any(word in message.content.lower() for word in ["who", "what", "why", "when", "where", "search", "google", "bing", "how", "which", "find", "info", "analyze"]):
                         if MessageDebug:
                             print(f"Web Search Trigger Word found")
                         max_results = DuckDuckGoMaxSearchResults
@@ -227,48 +229,81 @@ async def bot_answer(message):
                         for i, result in enumerate(DDGSearchResults)
                     ]
                     DDGSearchResultsString = '\n'.join(DDGSearchResultsList)
-                    WebResults = DDGSearchResultsString + WebResults
+                    #WebResults = DDGSearchResultsString + WebResults
                     if MessageDebug:
-                        print(f"DuckDuckGo Search Results: {DDGSearchResultsString}")
-                        for i, result in enumerate(DDGSearchResults):
-                            print(f"Result {i+1}: {result}")
+                        print(f"DuckDuckGo Search Results:\n{DDGSearchResultsString}")
                 except DuckDuckGoSearchException as e:
                     print(f"An error occurred while searching: {e}")
                     pass
         if AllowWebpageScraping:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            WebLinks = [link.rstrip('>') for link in re.findall(r'(https?://\S+)', message.content + " " + DDGSearchResultsString)]
+            WebScrapeHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:123.0) Gecko/20100101 Firefox/123.0'
             }
-            WebLinks = re.findall(r'(https?://\S+)', message.content + " " + DDGSearchResultsString)
-            threads = []
             for WebLink in WebLinks:
-                if "wikipedia.org" not in WebLink:
-                    if MessageDebug:
-                        print(f"Web Link found: {WebLink}")
-                    thread = threading.Thread(target=functions.scrape_webpage, args=(WebLink, WebResults))
-                    threads.append(thread)
-                    thread.start()
-            
-            # Wait for all threads to complete
-            for thread in threads:
-                thread.join()
+                WebLinkDecoded = ""
+                WebLinkDecoded = unquote(WebLink)
+                if "wikipedia.org" not in WebLinkDecoded:
+                    try:
+                        RelevantParagraphs = []
+                        response = requests.get(WebLinkDecoded, headers=WebScrapeHeaders, timeout=5)
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        # Find all <p> tags
+                        paragraphs = soup.find_all('p')
+                        # Extract the text from each <p> tag
+                        WebLinkText = ' '.join([p.get_text().strip() for p in paragraphs if len(p.get_text()) >= 10 and 'cookie' not in p.get_text().lower()])
+                        # Remove leading and trailing white spaces
+                        WebLinkText = WebLinkText.strip()
+                        # Compare each paragraph to message_content and include if similar enough
+                        for p in paragraphs:
+                            p_text = p.get_text().strip()
+                            similarity = SequenceMatcher(None, p_text, message.content).ratio()
+                            if similarity >= 0.25:  # Adjust the threshold as needed
+                                if MessageDebug:
+                                    print(f"Similarity: {similarity} | {p_text}")
+                                RelevantParagraphs.append(p_text)
+                            if sum(len(paragraph) for paragraph in RelevantParagraphs) >= 500:
+                                break
+                        WebResults = WebResults + f"[Webpage: {WebLinkDecoded} | {RelevantParagraphs}]"
+                        if MessageDebug:
+                            print(f"Webpage scraped: {WebLinkDecoded} | {str(RelevantParagraphs)}")
+                    except (requests.exceptions.RequestException, Exception) as e:
+                        print(f"An error occurred while scraping webpage: {e}")
+                    pass
+
         if AllowWikipediaExtracts:
-            WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s]+)', message.content + " " + DDGSearchResultsString)
+            WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
             if WikipediaLinks:
-                threads = []
                 for WikipediaLink in WikipediaLinks:
-                    if MessageDebug:
-                        print(f"Wikipedia Link found: {WikipediaLink}")
-                    thread = threading.Thread(target=functions.extract_wikipedia_page, args=(WikipediaLink, WebResults))
-                    threads.append(thread)
-                    thread.start()
-                
-                # Wait for all threads to complete
-                for thread in threads:
-                    thread.join()
+                    RelevantSentencesTrimmed = ""
+                    WikipediaLinkDecoded = unquote(WikipediaLink)
+                    try:
+                        search_results = wikipedia.search(WikipediaLinkDecoded)
+                        if search_results:
+                            top_result = search_results[0]
+                            WikipediaPage = wikipedia.page(top_result)
+                            WikipediaPageSentences = WikipediaPage.content.split('. ')
+                            WikipediaPageSentencesArray = [sentence.strip() for sentence in WikipediaPageSentences]
+                            RelevantSentences = []
+                            for sentence in WikipediaPageSentencesArray:
+                                similarity = SequenceMatcher(None, sentence, message.content).ratio()
+                                if similarity >= 0.25:  # Adjust the threshold as needed
+                                    if MessageDebug:
+                                        print(f"Similarity: {similarity} | {sentence}")
+                                    RelevantSentences.append(sentence)
+                                    if sum(len(sentence) for sentence in RelevantSentences) >= 500:
+                                        break
+                            if MessageDebug:
+                                print(f"[Wikipedia: {WikipediaLinkDecoded} | {str(RelevantSentencesTrimmed)}]")
+                            WebResults = WebResults + f"[Wikipedia: {WikipediaLinkDecoded} | {str(RelevantSentencesTrimmed)}]"
+                        else:
+                            print(f"No Wikipedia results found for: {WikipediaLinkDecoded}")
+                    except (wikipedia.exceptions.PageError, wikipedia.exceptions.DisambiguationError) as e:
+                        print(f"Wikipedia Error: {e}")
+                pass
 
         WebResults = WebResults + "[End of Web Results]"
-        WebResults = f"[Current UTC Unix time: {int(time.time())}]"
+        WebResults = f"[Current UTC Unix time: {int(time.time())}][Current UTC time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]" + WebResults
         Memory = Memory or "";History = History or "";WebResults = WebResults or "";DDGSearchResultsString = DDGSearchResultsString or ""
         image_request = functions.check_for_image_request(user_input)
         if GenerateImageOnly and image_request:
