@@ -19,15 +19,12 @@ def scrape_webpage(WebLink, WebResults):
     try:
         response = requests.get(WebLink, headers=headers, timeout=5)
         soup = BeautifulSoup(response.text, 'html.parser')
-        # Remove script and style tags
-        for script in soup(["script", "style"]):
-            script.extract()
-        # Get the plain text
-        WebLinkText = soup.get_text()
+        # Find all <p> tags
+        paragraphs = soup.find_all('p')
+        # Extract the text from each <p> tag
+        WebLinkText = ' '.join([p.get_text() for p in paragraphs if len(p.get_text()) >= 20 and 'cookie' not in p.get_text().lower()])
         # Remove leading and trailing white spaces
         WebLinkText = WebLinkText.strip()
-        # Remove extra white spaces and newlines
-        WebLinkText = re.sub('\s+', ' ', WebLinkText)
         WebLinkTextTrimmed = WebLinkText[:WebpageScrapeLength]
         WebResults += f"[{WebLink} | {WebLinkTextTrimmed}]"
         if MessageDebug:
