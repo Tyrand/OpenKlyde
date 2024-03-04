@@ -88,7 +88,7 @@ async def create_text_prompt(user_input, user, character, bot, memory, history, 
 async def create_image_prompt(user_input, character, text_api):
     # Create an image prompt for image generation
     user_input = user_input.lower()
-    subject = user_input.split("of", 1)[1] if "of" in user_input else f"{character}Please describe yourself in vivid detail."
+    subject = user_input.split("of", 1)[1] if "of" in user_input else f"{character} Please describe yourself in vivid detail."
     
     prompt = (
         f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n"
@@ -126,12 +126,10 @@ async def get_user_memory(user, characters):
             return trimmed_contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
-        return None
+        return ""
     except Exception as e:
-        await write_to_log(
-            f"An unexpected error occurred while accessing {file_path}: {e}"
-        )
-        return None
+        await write_to_log(f"An unexpected error occurred while accessing {file_path}: {e}")
+        return ""
 
 async def get_guild_memory(guild, characters):
     # Get guild conversation history
@@ -158,12 +156,10 @@ async def get_guild_memory(guild, characters):
             return trimmed_contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
-        return None, 0
+        return ""
     except Exception as e:
-        await write_to_log(
-            f"An unexpected error occurred while accessing {file_path}: {e}"
-        )
-        return None, 0
+        await write_to_log(f"An unexpected error occurred while accessing {file_path}: {e}")
+        return ""
 
 async def get_channel_memory(GuildName, ChannelName, characters):
     # Get channel conversation memory
@@ -186,14 +182,14 @@ async def get_channel_memory(GuildName, ChannelName, characters):
             return trimmed_contents
     except FileNotFoundError:
         await write_to_log("File " + file_path + " not found. Where did you lose it?")
-        return None, 0
+        return ""
     except Exception as e:
         await write_to_log("An unexpected error occurred while accessing " + file_path + ": " + str(e))
-        return None, 0
+        return ""
 
 async def get_channel_history(GuildName, ChannelName, characters):
     # Get channel conversation history
-    file_path = get_file_name(f"{ContextFolderLocation}\\context\\guilds\\{GuildName}", f"{ChannelName}.txt")
+    file_path = get_file_name(f"{ContextFolderLocation}\\guilds\\{GuildName}", f"{ChannelName}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -216,16 +212,14 @@ async def get_channel_history(GuildName, ChannelName, characters):
             return trimmed_contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
-        return None, 0
+        return ""
     except Exception as e:
-        await write_to_log(
-            f"An unexpected error occurred while accessing {file_path}: {e}"
-        )
-        return None, 0
+        await write_to_log(f"An unexpected error occurred while accessing {file_path}: {e}")
+        return ""
 
 async def get_user_history(user, characters):
     # Get user's conversation history
-    file_path = get_file_name(f"{ContextFolderLocation}\\context\\users", f"{user.name}.txt")
+    file_path = get_file_name(f"{ContextFolderLocation}\\users", f"{user.name}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
@@ -249,16 +243,16 @@ async def get_user_history(user, characters):
             return trimmed_contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
-        return None, 0
+        return ""
     except Exception as e:
         await write_to_log(
             f"An unexpected error occurred while accessing {file_path}: {e}"
         )
-        return None, 0
+        return ""
 
 async def add_to_user_history(content, user):
     # Add message to user's conversation history
-    file_name = get_file_name(f"{ContextFolderLocation}\\context\\users", f"{user.name}.txt")
+    file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{user.name}.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -271,7 +265,7 @@ async def add_to_user_history(content, user):
 
 async def add_to_channel_history(guild, channel, user, content):
     # Add message to channel's conversation history
-    file_name = get_file_name(f"{ContextFolderLocation}\\context\\guilds\\{guild.name}", f"{channel.name}.txt")
+    file_name = get_file_name(f"{ContextFolderLocation}\\guilds\\{guild.name}", f"{channel.name}.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -294,10 +288,10 @@ async def get_txt_file(filename, characters):
             return contents, len(contents)
     except FileNotFoundError:
         await write_to_log(f"File {filename} not found. Where did you lose it?")
-        return None, 0
+        return ""
     except Exception as e:
         await write_to_log(f"An unexpected error occurred: {e}")
-        return None, 0
+        return ""
 
 async def prune_text_file(file, trim_to):
     # Prune lines from a text file
@@ -324,11 +318,11 @@ def clean_user_message(client, user_input):
     pattern = re.compile("|".join(map(re.escape, bot_tags)), re.IGNORECASE)
     return pattern.sub("", user_input).strip()
 
-async def clean_llm_reply(message, UserName, bot):
+async def clean_llm_reply(message, user, bot):
     # Clean generated reply
-    bot_lower, UserName_lower = bot.lower(), UserName.lower()
+    bot_lower, user_name_lower = bot.lower(), user.name.lower()
     pattern = re.compile(
-        re.escape(bot_lower) + r":|" + re.escape(UserName_lower) + r":|You:",
+        re.escape(bot_lower) + r":|" + re.escape(user_name_lower) + r":|You:",
         re.IGNORECASE,
     )
     cleaned_message = pattern.sub("", message)

@@ -5,28 +5,23 @@ DiscordAccounts = [] # ID/Names of users who can bypass the rate limit and other
 ReactionEmoji = "⏲" # This is the emoji that the bot will react with when it is generating a response, it is removed when the response is sent
 PromptDebug = False # True/False: print prompt debug information to the console
 MessageDebug = False # True/False: print out how every message is processed
+TextAPIConfig = "text-default.json" # set to the name of the text API config file to use located in the configuration folder
 
 # Context Configuration - It's complicated but assume 3 characters is on average 1 token, make sure to stay within your set context limits.
-UseUserHistory = True # True/False: enable user history
 UserHistoryAmount = 4000
 UserHistoryAmountifDM = 8000 # set to 0 to use the same amount as UserHistoryAmount
-ContextFolderLocation = "" # set to the location of the user history files context\\users\\{username}.txt
-if ContextFolderLocation != "":
-    ContextFolderLocation = ContextFolderLocation + "\\"
+ContextFolderLocation = "context" # set to the location of the user history files context\\users\\{username}.txt
 
 UseChannelHistory = False # True/False: enable channel history (Multi-user mode)
 ChannelHistoryAmount = 6000
 ChannelHistoryOverride = "" # Set to the desired channel name to use for ChannelHistory if not using the same channel as the message
 
 # Memory Configuration - This is currently only manually set by you - it is used to provide permanent memory to the bot for a user, guild, or channel
-UserMemoryAmount = 3000
-UseUserMemory = True # True/False: to disable user memory
-
 GuildMemoryAmount = 3000
-UseGuildMemory = True # True/False: to disable guild memory
 
 ChannelMemoryAmount = 3000
-UseChannelMemory = True # True/False: to disable channel memory
+
+UserMemoryAmount = 3000
 
 ResponseMaxLength = 800 # set to the maximum number of tokens the model will generateR
 
