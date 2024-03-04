@@ -44,7 +44,7 @@ image_api = {}
 status_last_update = None
 # Dictionary to keep track of the last message time for each user
 last_message_time = {}
-
+wikipedia.set_rate_limiting(True)
 # Save the original print function
 original_print = builtins.print
 
@@ -71,14 +71,14 @@ async def bot_behavior(message):
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
-            print(f"Added message to '{ContextFolderLocation}context\\guilds\\{message.guild.name}\\{message.channel.name}.txt'")
+            print(f"Added message to '{ContextFolderLocation}\\guilds\\{message.guild.name}\\{message.channel.name}.txt'")
     if LogAllMessagesToUserHistory:
         # Log the message to the channel history
         if message.guild:
             await functions.add_to_user_history(
                 message.content, message.author
             )
-            print(f"Added message to '{ContextFolderLocation}context\\users\\{message.author.name}.txt")
+            print(f"Added message to '{ContextFolderLocation}\\users\\{message.author.name}.txt")
 
     # Check if the author is blocked
     if (message.author.id in BlockedUsers or message.author.name in BlockedUsers):
@@ -110,6 +110,13 @@ async def bot_behavior(message):
             print("No Response: IgnoreSymbols is True and message starts with a symbol")
         return False
 
+    # Authorized users can bypass the channel/guild/DM restrictions but must mention the bot to do so
+    if (message.author.id in DiscordAccounts or message.author.name in DiscordAccounts) and client.user.mentioned_in(message):
+        if MessageDebug:
+            print("Will Respond: User is in DiscordAccounts")
+        await bot_answer(message)
+        return True
+
     if message.guild is None:
         if AllowDirectMessages:
             await bot_answer(message)
@@ -139,7 +146,7 @@ async def bot_behavior(message):
 
     # If the message has not yet been returned False, the bot will respond
     if MessageDebug:
-        print("Will Response: Bot will respond")
+        print("Will Respond: Bot will respond")
 
     await bot_answer(message)
     return True
@@ -175,9 +182,9 @@ async def bot_answer(message):
     global text_api
     Memory = ""
     History = ""
-    WebResults = ""
     DDGSearchResultsString = ""
-    WebResults = "[Use this internet data to help you respond] " + WebResults
+    WebResults = f"[Current UTC Unix time: {int(time.time())}][Current UTC time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
+    WebResults = WebResults + "[Use this internet data to help you respond] "
     user_input = functions.clean_user_message(client,message.clean_content)
     if isinstance(message.channel, discord.TextChannel):
         print(f"{message.channel.name} | {UserName}: {user_input}")
@@ -192,24 +199,25 @@ async def bot_answer(message):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
         reply = await get_reply(message)
-        if UseUserMemory:
+        embed = await get_embed(message)
+        if UserMemoryAmount:
             UserMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
             Memory = UserMemory + Memory
-        if UseChannelMemory and message.guild:
+        if ChannelMemoryAmount and message.guild:
             if ChannelHistoryOverride: ChannelName = ChannelHistoryOverride
             else: ChannelName = message.channel.name
             ChannelMemory = str(await functions.get_channel_memory(message.guild.name, ChannelName, ChannelMemoryAmount))
             Memory = ChannelMemory + Memory
-        if UseGuildMemory and message.guild:
+        if GuildMemoryAmount and message.guild:
             GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
             Memory =  GuildMemory + Memory
-        if UseUserHistory:
+        if (UserHistoryAmount or UserHistoryAmountifDM):
             if isinstance(message.channel, discord.DMChannel) and UserHistoryAmountifDM:
                 UserHistory = str(await functions.get_user_history(user, UserHistoryAmountifDM))
             else:
                 UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
             History = UserHistory + History
-        if UseChannelHistory and message.guild:
+        if ChannelHistoryAmount and message.guild:
             if ChannelHistoryOverride:
                 ChannelName = ChannelHistoryOverride
             else:
@@ -253,11 +261,10 @@ async def bot_answer(message):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:123.0) Gecko/20100101 Firefox/123.0'
             }
             for WebLink in WebLinks:
-                WebLinkDecoded = ""
                 WebLinkDecoded = unquote(WebLink)
                 if "wikipedia.org" not in WebLinkDecoded and "fandom.com" not in WebLinkDecoded:
                     try:
-                        RelevantParagraphs = []
+                        RelevantSentences = []
                         response = requests.get(WebLinkDecoded, headers=WebScrapeHeaders)
                         soup = BeautifulSoup(response.text, 'html.parser')
                         # Find all <p> tags
@@ -266,91 +273,93 @@ async def bot_answer(message):
                         WebLinkText = ' '.join([p.get_text().strip() for p in paragraphs if len(p.get_text()) >= 10 and 'cookie' not in p.get_text().lower()])
                         # Remove leading and trailing white spaces
                         WebLinkText = WebLinkText.strip()
-                        # Compare each paragraph to message_content and include if similar enough
+                        # Calculate similarity for each sentence
+                        similarity_scores = []
                         for p in paragraphs:
                             p_text = p.get_text().strip()
-                            similarity = SequenceMatcher(None, p_text, message.content).ratio()
-                            if similarity >= 0.2:  # Adjust the threshold as needed
-                                if MessageDebug:
-                                    print(f"Similarity: {similarity} | {p_text}")
-                                RelevantParagraphs.append(p_text)
-                            if sum(len(paragraph) for paragraph in RelevantParagraphs) >= WebpageScrapeLength:
+                            sentences = p_text.split('. ')
+                            for sentence in sentences:
+                                similarity = SequenceMatcher(None, sentence, message.content).ratio()
+                                if similarity > 0.2 or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):
+                                    if MessageDebug:
+                                        print(f"Similarity: {round(similarity, 2)} | {sentence}")
+                                    similarity_scores.append((sentence, similarity))
+                        # Sort sentences based on similarity scores
+                        similarity_scores.sort(key=lambda x: x[1], reverse=True)
+                        # Include sentences in RelevantSentences until WebpageScrapeLength is reached
+                        for sentence, similarity in similarity_scores:
+                            if sum(len(s) for s in RelevantSentences) >= WebpageScrapeLength:
+                                RelevantSentences.append(sentence)
                                 break
-                        WebResults = WebResults + f"[Webpage: {WebLinkDecoded} | {RelevantParagraphs}]"
+                        WebResults = WebResults + f"[Webpage: {WebLinkDecoded} | {RelevantSentences}]"
                         if MessageDebug:
-                            print(f"Webpage scraped: {WebLinkDecoded} | {str(RelevantParagraphs)}")
+                            print(f"Webpage scraped: {WebLinkDecoded} | {str(RelevantSentences)}")
                     except (requests.exceptions.RequestException, Exception) as e:
                         print(f"An error occurred while scraping webpage: {e}")
-                    pass
+            pass
         if AllowWikipediaExtracts:
-            WikipediaLinks = re.findall(r'wikipedia.org/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
-            if WikipediaLinks:
-                for WikipediaLink in WikipediaLinks:
-                    RelevantSentencesTrimmed = ""
-                    WikipediaLinkDecoded = unquote(WikipediaLink)
-                    try:
-                        search_results = wikipedia.search(WikipediaLinkDecoded)
-                        if search_results:
-                            top_result = search_results[0]
-                            WikipediaPage = wikipedia.page(top_result)
-                            WikipediaPageSentences = WikipediaPage.content.split('. ')
-                            WikipediaPageSentencesArray = [sentence.strip() for sentence in WikipediaPageSentences]
-                            RelevantSentences = []
-                            for sentence in WikipediaPageSentencesArray:
-                                similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                                if similarity >= 0.2:  # Adjust the threshold as needed
-                                    if MessageDebug:
-                                        print(f"Similarity: {similarity} | {sentence}")
-                                    RelevantSentences.append(sentence)
-                                    if sum(len(sentence) for sentence in RelevantSentences) >= WikipediaExtractLength:
-                                        break
-                            if MessageDebug:
-                                print(f"[Wikipedia: {WikipediaLinkDecoded} | {str(RelevantSentencesTrimmed)}]")
-                            WebResults = WebResults + f"[Wikipedia: {WikipediaLinkDecoded} | {str(RelevantSentencesTrimmed)}]"
-                        else:
-                            print(f"No Wikipedia results found for: {WikipediaLinkDecoded}")
-                    except (wikipedia.exceptions.PageError, wikipedia.exceptions.DisambiguationError) as e:
-                        print(f"Wikipedia Error: {e}")
-                pass
-        if AllowFandomExtracts:
-            FandomLinks = re.findall(r'fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
-            if FandomLinks:
+            Links = re.findall(r'wikipedia.org/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
+            if Links:
                 RelevantSentencesTrimmed = ""
-                for FandomLink in FandomLinks:
-                    FandomLinkDecoded = unquote(FandomLink)
+                for Link in Links:
+                    LinkDecoded = unquote(Link)
                     try:
-                        search_results = fandom.search(FandomLinkDecoded)
-                        if search_results:
-                            top_result = search_results[0]
-                            FandomPage = fandom.page(top_result)
-                            FandomPageSentences = FandomPage.content.split('. ')
-                            FandomPageSentencesArray = [sentence.strip() for sentence in FandomPageSentences]
-                            RelevantSentences = []
-                            for sentence in FandomPageSentencesArray:
-                                similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                            if similarity >= 0.2:  # Adjust the threshold as needed
+                        LinkPage = wikipedia.page(LinkDecoded)
+                        LinkPageSentences = LinkPage.content.split('. ')
+                        LinkPageSentencesArray = [sentence.strip() for sentence in LinkPageSentences]
+                        RelevantSentences = []
+                        for sentence in LinkPageSentencesArray:
+                            similarity = SequenceMatcher(None, sentence, message.content).ratio()
+                            if similarity >= 0.2 or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
                                 if MessageDebug:
-                                    print(f"Similarity: {similarity} | {sentence}")
-                                RelevantSentences.append(sentence)
-                                if sum(len(sentence) for sentence in RelevantSentences) >= FandomExtractLength:
-                                    break
-                            if MessageDebug:
-                                print(f"[Fandom: {FandomLinkDecoded} | {str(RelevantSentencesTrimmed)}]")
-                            WebResults = WebResults + f"[Fandom: {FandomLinkDecoded} | {str(RelevantSentencesTrimmed)}]"
-                        else:
-                            print(f"No Fandom results found for: {FandomLinkDecoded}")
+                                    print(f"Similarity: {round(similarity, 2)} | {sentence}")
+                            RelevantSentences.append(sentence)
+                        RelevantSentences.sort(key=lambda x: SequenceMatcher(None, x, message.content).ratio(), reverse=True)
+                        RelevantSentencesTrimmed = ' '.join(RelevantSentences)[:WikipediaExtractLength]
+                        if MessageDebug:
+                            print(f"[Wikipedia article scraped: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]")
+                        WebResults = WebResults + f"[Wikipedia: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]"
+                    except Exception as e:
+                        print(f"An error occurred while extracting from Wikipedia: {e}")
+            pass
+        if AllowFandomExtracts:
+            Links = re.findall(r'fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
+            if Links:
+                RelevantSentencesTrimmed = ""
+                for Link in Links:
+                    LinkDecoded = unquote(Link)
+                    try:
+                        LinkPage = fandom.page(LinkDecoded)
+                        LinkPageSentences = LinkPage.content.split('. ')
+                        LinkPageSentencesArray = [sentence.strip() for sentence in LinkPageSentences]
+                        RelevantSentences = []
+                        for sentence in LinkPageSentencesArray:
+                            similarity = SequenceMatcher(None, sentence, message.content).ratio()
+                            if similarity >= 0.2 or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
+                                if MessageDebug:
+                                    print(f"Similarity: {round(similarity, 2)} | {sentence}")
+                            RelevantSentences.append(sentence)
+                        RelevantSentences.sort(key=lambda x: SequenceMatcher(None, x, message.content).ratio(), reverse=True)
+                        RelevantSentencesTrimmed = ' '.join(RelevantSentences)[:FandomExtractLength]
+                        if MessageDebug:
+                            print(f"[Fandom article scraped: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]")
+                        WebResults = WebResults + f"[Fandom: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]"
                     except Exception as e:
                         print(f"An error occurred while extracting from Fandom: {e}")
             pass
-        WebResults = WebResults + "[End of Web Results]"
-        WebResults = f"[Current UTC Unix time: {int(time.time())}][Current UTC time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]" + WebResults
-        Memory = Memory or "";History = History or "";WebResults = WebResults or "";DDGSearchResultsString = DDGSearchResultsString or ""
+        WebResults = WebResults + "[End of Web Results]\n"
+        Memory = "" if Memory is None else Memory
+        History = "" if History is None else History
+        WebResults = "" if WebResults is None else WebResults
+        DDGSearchResultsString = "" if DDGSearchResultsString is None else DDGSearchResultsString
         image_request = functions.check_for_image_request(user_input)
+        message.content = embed + message.content
         if GenerateImageOnly and image_request:
             character = ""
             character_card["name"] = ""
             character_card["persona"] = ""
             character_card["instructions"] = ""
+            WebResults = ""
             Memory = ""
             History = ""
             reply = ""
@@ -359,9 +368,9 @@ async def bot_answer(message):
             user,
             character,
             character_card["name"],
+            WebResults,
             Memory,
             History,
-            WebResults,
             reply,
             text_api,
         )
@@ -370,17 +379,18 @@ async def bot_answer(message):
             print("User:", user)
             print("Character:", character)
             print("Character Card Name:", character_card['name'])
+            print("Web Results:", WebResults[:50])
             print("User Memory:", Memory[:50])
             print("User History:", History[:50])
+            print("Embed:", embed[:50])
             print("Reply:", reply)
             print("Text API:", text_api)
     queue_item = {
         "prompt": prompt,
         "message": message,
         "user_input": user_input,
-        "UserName": UserName,
         "user": user,
-        "BotDisplayName": client.user.display_name,
+        "bot": client.user,
         "image": image_request,
     }
 
@@ -393,58 +403,50 @@ async def start_typing_status(message):
         await message.channel.typing()
         await asyncio.sleep(1)
 
-# Get the reply to a message if it's relevant to the conversation
+# If the message is a part of a reply chain, get any messages that are being replied to up to a maximum of 4
 async def get_reply(message):
     reply = ""
+    counter = 0
+    max_messages = 4  # Maximum number of messages to fetch for context
+
     # If the message reference is not none, meaning someone is replying to a message
-    if message.reference is not None:
+    while message.reference is not None and counter < max_messages:
         # Grab the message that's being replied to
         referenced_message = await message.channel.fetch_message(
             message.reference.message_id
         )
-        # Verify that the author of the message is bot and that it has a reply
-        if (
-            referenced_message.reference is not None
-            and referenced_message.author == client.user
-        ):
-            # Grab that other reply as well
-            referenced_user_message = await message.channel.fetch_message(
-                referenced_message.reference.message_id
-            )
-            # If the author of the reply is not the same person as the initial user, we need this data
-            if referenced_user_message.author != message.author:
-                reply = (
-                    referenced_user_message.author.name
-                    + ": "
-                    + referenced_user_message.clean_content
-                    + "\n"
-                )
-                reply = (
-                    reply
-                    + referenced_message.author.name
-                    + ": "
-                    + referenced_message.clean_content
-                    + "\n"
-                )
-                reply = functions.clean_user_message(client,reply)
-                return reply
-        # If the referenced message isn't from the bot, use it in the reply
-        if referenced_message.author != client.user:
-            reply = (
-                referenced_message.author.name
-                + ": "
-                + referenced_message.clean_content
-                + "\n"
-            )
-            return reply
+
+        # Add the referenced message to the reply
+        reply += (
+            referenced_message.author.name
+            + ": "
+            + referenced_message.clean_content
+            + "\n"
+        )
+
+        # Set the current message to the referenced message for the next iteration
+        message = referenced_message
+        counter += 1
+
+    reply = functions.clean_user_message(client, reply)
     return reply
+
+# Function to grab all information from any embeds inside the message
+async def get_embed(message):
+    embed = ""
+    if message.embeds:
+        for i, e in enumerate(message.embeds, 1):
+            if e.fields:
+                for field in e.fields:
+                    embed += f"Embed {i} - Field: {field.name}, Value: {field.value} "
+    return embed
 
 async def handle_llm_response(content, response):
     try:
         llm_response = response
         data = extract_data_from_response(llm_response)
         llm_message = await functions.clean_llm_reply(
-            data, content["UserName"], character_card["name"]
+            data, content['user'], character_card["name"]
         )
         queue_item = {"response": llm_message, "content": content}
 
@@ -465,16 +467,22 @@ def extract_data_from_response(llm_response):
             return llm_response["choices"][0]["text"]
         except (KeyError, IndexError):
             return ""  # Return an empty string if data extraction fails
+
 async def send_api_request(session, url, headers, data):
     async with session.post(url, headers=headers, data=data) as response:
         return await response.json()
 
-async def is_valid_response(content,response_text):
+async def is_valid_response(content, response_text):
+    print("Checking if response is valid")
     # Define the pattern to search for
     Pattern_EmptyMessage = r'[@<>\[\]]'
-    Pattern_PossibleUsername = r'^@'+re.escape(character_card['name'])+r'$'
-    Pattern_CharacterName = r'^@'+re.escape(content['UserName'])+r'$'
-    Pattern_DisplayName = r'^@'+re.escape(content['BotDisplayName'])+r'$'
+    Pattern_PossibleUsername = r'^@' + re.escape(character_card['name']) + r'$'
+    print(content['user'].name)
+    print(content['bot'].display_name)
+    print(content['bot'].name)
+    Pattern_CharacterName = r'^@' + re.escape(content['user'].name) + r'$'
+    Pattern_DisplayName = r'^@' + re.escape(content['bot'].display_name) + r'$'
+    Pattern_DisplayName = r'^@' + re.escape(content['bot'].name) + r'$'
 
     # Check if the response text matches the pattern
     if (
@@ -499,7 +507,7 @@ async def send_to_model_queue():
         if not LogAllMessagesToUserHistory:
             await functions.add_to_user_history(
                 content["user_input"],
-                content["User"]
+                content["user"],
             )
         # Log the API request
         await functions.write_to_log(
@@ -507,7 +515,7 @@ async def send_to_model_queue():
         )
         async with aiohttp.ClientSession() as session:
             retry_count = 0
-            while retry_count < 5:
+            while retry_count < 3:
                 try:
                     response_data = await send_api_request(
                         session,
@@ -532,8 +540,8 @@ async def send_to_model_queue():
                 except Exception as e:
                     print(f"Error occurred: {e}")
                     retry_count += 1
-            if retry_count == 5:
-                response_text = 'Could not generate a response correctly after 5 attempts. Please try again or use a different prompt.'
+            if retry_count >= 3:
+                response_text = 'Could not generate a response correctly after 3 attempts. Please try again or use a different prompt.'
                 await content["message"].remove_reaction(ReactionEmoji, client.user)
                 print('text: ' + response_text)
                 await content['message'].reply(response_text)
@@ -549,7 +557,7 @@ async def send_to_stable_diffusion_queue():
             data_json = json.dumps(data)
             await functions.write_to_log(
                 "Sending prompt from "
-                + image_prompt["content"]["UserName"]
+                + image_prompt["content"]["username"]
                 + " to Stable Diffusion model."
             )
             async with ClientSession() as session:
@@ -612,7 +620,7 @@ async def send_to_user_queue():
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
-            reply["content"]["user"]
+            reply["content"]["bot"]
         )
         queue_to_send_message.task_done()
         await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
@@ -626,7 +634,7 @@ async def on_ready():
     global text_api
     global image_api
     global character_card
-    text_api = await functions.set_api("text-default.json")
+    text_api = await functions.set_api(TextAPIConfig)
     text_api["parameters"]["max_length"] = ResponseMaxLength
     image_api = await functions.set_api("image-default.json")
     api_check = await functions.api_status_check(
@@ -644,7 +652,7 @@ async def on_ready():
     #client.tree.add_command(parameters)
 
     # Sync current slash commands (commented out unless we have new commands)
-    #client.tree.sync()
+    await client.tree.sync()
 
 # Slash command to update the bot's personality
 personality = app_commands.Group(
@@ -704,7 +712,7 @@ async def reset_history(interaction):
     UserName = str(interaction.user.name)
     UserName = UserName.replace(" ", "")
 
-    file_name = functions.get_file_name(ContextLocation, str(user.name) + ".txt")
+    file_name = functions.get_file_name(ContextFolderLocation+"\\users", str(user.name) + ".txt")
 
     # Attempt to remove or rename the file based on the condition
     try:
@@ -741,7 +749,7 @@ async def view_history(interaction):
     UserName = interaction.user.name
     UserName = UserName.replace(" ", "")
 
-    file_name = functions.get_file_name(ContextLocation, str(user.name) + ".txt")
+    file_name = functions.get_file_name(ContextFolderLocation+"\\users", str(user.name) + ".txt")
 
     try:
         with open(
@@ -832,7 +840,8 @@ configuration = app_commands.Group(
     name="view", description="View the bot's current configuration."
 )
 async def view_configuration(interaction):
-
+    # Reload the config.py module to get updated values
+    importlib.reload(config)
     # List the current configuration settings
     # Settings listed are: ResponseMaxLength, GuildMemoryAmount, ChannelMemoryAmount, UserMemoryAmount, ChannelHistoryAmount,
     # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowFandomExtracts,
@@ -840,21 +849,41 @@ async def view_configuration(interaction):
     await interaction.response.send_message(
         "The bot's current configuration is as follows:\n" + 
         "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx "+str(ResponseMaxLength*3)+" ~ "+str(ResponseMaxLength*4)+" characters)"  + "\n" +
+        "Channel History (characters): " + str(ChannelHistoryAmount) + "\n" +
+        "User History (characters): " + str(UserHistoryAmount) + "\n" +
         "Guild Memory (characters): " + str(GuildMemoryAmount) + "\n" +
         "Channel Memory (characters): " + str(ChannelMemoryAmount) + "\n" +
         "User Memory (characters): " + str(UserMemoryAmount) + "\n" +
-        "Channel History (characters): " + str(ChannelHistoryAmount) + "\n" +
-        "User History (characters): " + str(UserHistoryAmount) + "\n" +
         "Allow Direct Messages: " + str(AllowDirectMessages) + "\n" +
         "UserRateLimitSeconds: " + str(UserRateLimitSeconds) + "\n" +
         "Reply to Bots: " + str(ReplyToBots) + "\n" +
         "Mention or Reply Required: " + str(MentionOrReplyRequired) + "\n" +
-        "Wikipedia Extracting: " + str(AllowWikipediaExtracts) + "\n" +
-        "Webpage Scraping: " + str(AllowWebpageScraping) + "\n" +
+        "Wikipedia Scraping: " + str(AllowWikipediaExtracts) + "\n" +
+        "Fandom.com Scraping: " + str(AllowFandomExtracts) + "\n" +
+        "General Internet Scraping: " + str(AllowWebpageScraping) + "\n" +
         "Specific Guilds: " + str(SpecificGuildMode) + " | " +
-        str(SpecificGuildModeIDs) + str(SpecificGuildModeNames) + "\n" +
+        str(SpecificGuildModeIDs) + " " + str(SpecificGuildModeNames) + "\n" +
         "Specific Channels: " + str(SpecificChannelMode) + " | " +
-        str(SpecificChannelModeIDs) + str(SpecificChannelModeNames) + "\n"
+        str(SpecificChannelModeIDs) + " " + str(SpecificChannelModeNames) + "\n"
+    )
+
+# Command to view a list of available characters.
+@configuration.command(
+    name="reload", description="reload the bot's config file."
+)
+async def view_configuration(interaction):
+    #Command only available to users in the DiscordAccounts list
+    if interaction.user.id not in DiscordAccounts:
+        await interaction.response.send_message(
+            "You do not have permission to reload the bot's configuration."
+        )
+        return
+
+    # Reload the config.py module to get updated values
+    importlib.reload(config)
+    # Let the user know that their request has been completed
+    await interaction.response.send_message(
+        "The bot's configuration has been reloaded."
     )
 
 # Slash commands for character card presets (if not interested in manually updating)
@@ -915,7 +944,6 @@ async def parameter_select_callback(interaction):
     await interaction.followup.send(
         interaction.user.name + " updated the bot's sampler parameters. " + api_check
     )
-
 
 @client.event
 async def on_message(message):
