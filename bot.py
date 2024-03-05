@@ -198,6 +198,8 @@ async def bot_answer(message):
     if image_request and (message.author.id in DiscordAccounts or message.author.name in DiscordAccounts):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
+        if ResolveMentionsToUserNames or ResolveMentionsToDisplayNames:
+            await resolve_mentions(message)
         reply = await get_reply(message)
         embed = await get_embed(message)
         message.content = embed + message.content
@@ -439,6 +441,17 @@ async def get_embed(message):
                     embed += f"Embed {i} - Field: {field.name}, Value: {field.value} "
     return embed
 
+# Function to resolve mentions in the message i.e. <@77921824876269568> -> Algy
+async def resolve_mentions(message):
+    for user in message.mentions:
+        if user.nick and ResolveMentionsToDisplayNames:
+            message.content = message.content.replace(f"<@!{user.id}>", user.nick)
+            message.content = message.content.replace(f"<@{user.id}>", user.nick)
+        elif ResolveMentionsToUserNames:
+            message.content = message.content.replace(f"<@!{user.id}>", user.name)
+            message.content = message.content.replace(f"<@{user.id}>", user.name)
+    return message.content
+
 async def handle_llm_response(content, response):
     try:
         llm_response = response
@@ -475,18 +488,21 @@ async def is_valid_response(content, response_text):
         print("Checking if response is valid")
     # Define the pattern to search for
     Pattern_EmptyMessage = r'[@<>\[\]]'
-    Pattern_PossibleUsername = r'^@' + re.escape(character_card['name']) + r'$'
-    Pattern_CharacterName = r'^@' + re.escape(content['user'].name) + r'$'
-    Pattern_DisplayName = r'^@' + re.escape(content['bot'].display_name) + r'$'
-    Pattern_DisplayName = r'^@' + re.escape(content['bot'].name) + r'$'
+    Pattern_BotCardName = r'^@' + re.escape(character_card['name']) + r'$'
+    Pattern_UserUsername = r'^@' + re.escape(content['user'].name) + r'$'
+    Pattern_UserDisplayName = r'^@' + re.escape(content['user'].display_name) + r'$'
+    Pattern_BotDisplayName = r'^@' + re.escape(content['bot'].display_name) + r'$'
+    Pattern_BotUsername = r'^@' + re.escape(content['bot'].name) + r'$'
 
     # Check if the response text matches the pattern
     if (
         response_text.strip() is None or response_text.strip() == ""
         or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
-        or re.match(Pattern_PossibleUsername, response_text[:16], re.IGNORECASE)
-        or re.match(Pattern_CharacterName, response_text[:16], re.IGNORECASE)
-        or re.match(Pattern_DisplayName, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_BotCardName, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_UserUsername, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_UserDisplayName, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_BotDisplayName, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_BotUsername, response_text[:16], re.IGNORECASE)
         or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
     ):
         return False
@@ -527,8 +543,8 @@ async def send_to_model_queue():
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
-                    await handle_llm_response(content, response_data)
                     if await is_valid_response(content, response_text):
+                        await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
                         break
                     # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
