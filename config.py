@@ -37,6 +37,8 @@ LogAllMessagesToChannelHistory = False # True/False: to log all messages to a fi
 AddTimestamp = False # True/False: add a timestamp to the log file, can cause issues if used for ChannelHistory depending on your model
 LogNoTextUploads = False # True/False: log messages without text content as <media>
 
+ResolveMentionsToUserNames = True # Resolve @s to usernames
+ResolveMentionsToDisplayNames = True # Resolve @s to display_names
 IgnoreSymbols = False # True/False: ignore messages which start with common symbols / emojis / URLs
 RenameOldUserHistory = False # True/False: rename old user history files instead of deleting them
 BadResponseSafeGuards = True # True/False: enable safe guards to prevent the bot from sending bad responses, like mimicing users.
