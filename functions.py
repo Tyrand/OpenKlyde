@@ -250,7 +250,7 @@ async def get_user_history(user, characters):
         )
         return ""
 
-async def add_to_user_history(content, user):
+async def add_to_user_history(content, user, file):
     # Add message to user's conversation history
     file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{user.name}.txt")
     if LogNoTextUploads and not content:
