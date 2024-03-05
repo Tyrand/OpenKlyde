@@ -109,19 +109,17 @@ async def get_user_memory(user, characters):
             contents = file.read()
             print("Accessed:", file_path)
             print(
-                "Total user_memory characters:",
-                len(contents),
-                "Total user_memory lines:",
-                contents.count("\n"),
+                "Total user_memory characters: ",len(contents),
+                " | Total user_memory lines: ",contents.count("\n"),
             )
-            if len(contents) > characters:
+            if characters == 0:
+                return ""
+            elif len(contents) > characters:
                 contents = contents[-characters:]
             trimmed_contents = contents.strip()
             print(
-                "Trimmed user_memory characters:",
-                len(trimmed_contents),
-                "Trimmed user_memory lines:",
-                trimmed_contents.count("\n"),
+                "Trimmed user_memory characters: ",len(trimmed_contents),
+                " | Trimmed user_memory lines: ",trimmed_contents.count("\n"),
             )
             return trimmed_contents
     except FileNotFoundError:
@@ -139,19 +137,17 @@ async def get_guild_memory(guild, characters):
             contents = file.read()
             print("Accessed:", file_path)
             print(
-                "Total guild_memory characters:",
-                len(contents),
-                "Total guild_memory lines:",
-                contents.count("\n"),
+                "Total guild_memory characters: ",len(contents),
+                " | Total guild_memory lines: ",contents.count("\n"),
             )
-            if len(contents) > characters:
+            if characters == 0:
+                return ""
+            elif len(contents) > characters:
                 contents = contents[-characters:]
             trimmed_contents = contents.strip()
             print(
-                "Trimmed guild_memory characters:",
-                len(trimmed_contents),
-                "Trimmed guild_memory lines:",
-                trimmed_contents.count("\n"),
+                " Trimmed guild_memory characters: ",len(trimmed_contents),
+                " | Trimmed guild_memory lines: ",trimmed_contents.count("\n"),
             )
             return trimmed_contents
     except FileNotFoundError:
@@ -169,15 +165,17 @@ async def get_channel_memory(GuildName, ChannelName, characters):
             contents = file.read()
             print("Accessed: " + file_path)
             print(
-                "Total channel_memory characters: " + str(len(contents)) +
-                ", Total channel_memory lines: " + str(contents.count('\\n'))
+                "Total channel_memory characters: " + len(contents) +
+                " | Total channel_memory lines: " + contents.count('\n')
             )
-            if len(contents) > characters:
+            if characters == 0:
+                return ""
+            elif len(contents) > characters:
                 contents = contents[-characters:]
             trimmed_contents = contents.strip()
             print(
-                "Trimmed channel_memory characters: " + str(len(trimmed_contents)) +
-                ", Trimmed channel_memory lines: " + str(trimmed_contents.count('\\n'))
+                "Trimmed channel_memory characters: " + len(trimmed_contents) +
+                " | Trimmed channel_memory lines: " + trimmed_contents.count('\n')
             )
             return trimmed_contents
     except FileNotFoundError:
@@ -195,19 +193,17 @@ async def get_channel_history(GuildName, ChannelName, characters):
             contents = file.read()
             print("Accessed:", file_path)
             print(
-                "Total channel_history characters:",
-                len(contents),
-                "Total channel_history lines:",
-                contents.count("\n"),
+                "Total channel_history characters: ",len(contents),
+                " | Total channel_history lines: ",contents.count("\n"),
             )
-            if len(contents) > characters:
+            if characters == 0:
+                return ""
+            elif len(contents) > characters:
                 contents = contents[-characters:]
             trimmed_contents = contents.strip()
             print(
-                "Trimmed channel_history characters:",
-                len(trimmed_contents),
-                "Trimmed channel_history lines:",
-                trimmed_contents.count("\n"),
+                "Trimmed channel_history characters: ",len(trimmed_contents),
+                " | Trimmed channel_history lines: ",trimmed_contents.count("\n"),
             )
             return trimmed_contents
     except FileNotFoundError:
@@ -225,22 +221,22 @@ async def get_user_history(user, characters):
             contents = file.read()
             print("Accessed:", file_path)
             print(
-                "Total user_history characters:",
-                len(contents),
-                "Total user_history lines:",
-                contents.count("\n"),
+                "Total user_history characters: ",len(contents),
+                " | Total user_history lines: ",contents.count("\n"),
             )
-            if len(contents) > characters:
-                contents = contents[-characters:]
-
-            trimmed_contents = contents.strip()
-            print(
-                "Trimmed user_history characters:",
-                len(trimmed_contents),
-                "Trimmed user_history lines:",
-                trimmed_contents.count("\n"),
-            )
-            return trimmed_contents
+            if characters == 0:
+                return ""
+            elif characters > 0:
+                if len(contents) > characters:
+                    contents = contents[-characters:]
+                trimmed_contents = contents.strip()
+                print(
+                    "Trimmed user_history characters: ",len(trimmed_contents),
+                    " | Trimmed user_history lines: ",trimmed_contents.count("\n"),
+                )
+                return trimmed_contents
+            else:
+                return contents
     except FileNotFoundError:
         await write_to_log(f"File {file_path} not found. Where did you lose it?")
         return ""
