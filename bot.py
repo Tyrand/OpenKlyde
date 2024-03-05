@@ -471,7 +471,8 @@ async def send_api_request(session, url, headers, data):
         return await response.json()
 
 async def is_valid_response(content, response_text):
-    print("Checking if response is valid")
+    if MessageDebug:
+        print("Checking if response is valid")
     # Define the pattern to search for
     Pattern_EmptyMessage = r'[@<>\[\]]'
     Pattern_PossibleUsername = r'^@' + re.escape(character_card['name']) + r'$'
@@ -491,6 +492,8 @@ async def is_valid_response(content, response_text):
         return False
     if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
         return False
+    if MessageDebug:
+        print("Response is valid")
     return True
 
 async def send_to_model_queue():
