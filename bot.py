@@ -49,7 +49,7 @@ wikipedia.set_rate_limiting(True)
 original_print = builtins.print
 
 def custom_print(*args, **kwargs):
-    original_print("["+datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')+"] | ", end='')
+    original_print("["+datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]+"] | ", end='')
     original_print(*args, **kwargs)
     
 builtins.print = custom_print
@@ -76,7 +76,7 @@ async def bot_behavior(message):
         # Log the message to the channel history
         if message.guild:
             await functions.add_to_user_history(
-                message.content, message.author
+                message.content, message.author, message.author
             )
             print(f"Added message to '{ContextFolderLocation}\\users\\{message.author.name}.txt")
 
@@ -104,7 +104,7 @@ async def bot_behavior(message):
             print("No Response: Empty message")
         return False
 
-    # If the message starts with a symbol, don't respond.
+    # If the message starts with a symbol, don't respond - mainly used for MentionOrReplyRequired = False
     if IgnoreSymbols and message.content.startswith((".", ",", "!", "?", ":", "'", "\"", "/", "<", ">", "(", ")", "[", "]", ":", "http")):
         if MessageDebug:
             print("No Response: IgnoreSymbols is True and message starts with a symbol")
@@ -200,6 +200,7 @@ async def bot_answer(message):
     else:
         reply = await get_reply(message)
         embed = await get_embed(message)
+        message.content = embed + message.content
         if UserMemoryAmount:
             UserMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
             Memory = UserMemory + Memory
@@ -269,10 +270,8 @@ async def bot_answer(message):
                         soup = BeautifulSoup(response.text, 'html.parser')
                         # Find all <p> tags
                         paragraphs = soup.find_all('p')
-                        # Extract the text from each <p> tag
-                        WebLinkText = ' '.join([p.get_text().strip() for p in paragraphs if len(p.get_text()) >= 10 and 'cookie' not in p.get_text().lower()])
-                        # Remove leading and trailing white spaces
-                        WebLinkText = WebLinkText.strip()
+                        # Filter paragraphs based on conditions
+                        paragraphs = [p for p in paragraphs if len(p.get_text().strip()) > 10 and 'cookie' not in p.get_text().lower()]
                         # Calculate similarity for each sentence
                         similarity_scores = []
                         for p in paragraphs:
@@ -353,7 +352,6 @@ async def bot_answer(message):
         WebResults = "" if WebResults is None else WebResults
         DDGSearchResultsString = "" if DDGSearchResultsString is None else DDGSearchResultsString
         image_request = functions.check_for_image_request(user_input)
-        message.content = embed + message.content
         if GenerateImageOnly and image_request:
             character = ""
             character_card["name"] = ""
@@ -477,9 +475,6 @@ async def is_valid_response(content, response_text):
     # Define the pattern to search for
     Pattern_EmptyMessage = r'[@<>\[\]]'
     Pattern_PossibleUsername = r'^@' + re.escape(character_card['name']) + r'$'
-    print(content['user'].name)
-    print(content['bot'].display_name)
-    print(content['bot'].name)
     Pattern_CharacterName = r'^@' + re.escape(content['user'].name) + r'$'
     Pattern_DisplayName = r'^@' + re.escape(content['bot'].display_name) + r'$'
     Pattern_DisplayName = r'^@' + re.escape(content['bot'].name) + r'$'
@@ -508,6 +503,7 @@ async def send_to_model_queue():
             await functions.add_to_user_history(
                 content["user_input"],
                 content["user"],
+                content["user"]
             )
         # Log the API request
         await functions.write_to_log(
@@ -528,9 +524,8 @@ async def send_to_model_queue():
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
-                    if await is_valid_response(content,response_text):
-                        # Send the response to the next step
-                        await handle_llm_response(content, response_data)
+                    await handle_llm_response(content, response_data)
+                    if await is_valid_response(content, response_text):
                         queue_to_process_message.task_done()
                         break
                     # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
@@ -583,8 +578,6 @@ async def send_to_stable_diffusion_queue():
 async def send_large_message(original_message, reply_content, file=None):
     max_chars = 2000
     chunks = []
-    if not reply_content or reply_content == "":
-        reply_content = " "
     while len(reply_content) > max_chars:
         last_newline_index = reply_content.rfind("\n", 0, max_chars)
         if last_newline_index == -1:
@@ -620,7 +613,8 @@ async def send_to_user_queue():
         # Add the message to user's history
         await functions.add_to_user_history(
             reply["response"],
-            reply["content"]["bot"]
+            reply["content"]["bot"],
+            reply["content"]["user"]
         )
         queue_to_send_message.task_done()
         await reply["content"]["message"].remove_reaction(ReactionEmoji, client.user)
@@ -650,6 +644,7 @@ async def on_ready():
     #client.tree.add_command(personality)
     #client.tree.add_command(character)
     #client.tree.add_command(parameters)
+    await client.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name=str(TextAPIConfig).replace(".json", "")))
 
     # Sync current slash commands (commented out unless we have new commands)
     await client.tree.sync()
