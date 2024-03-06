@@ -15,6 +15,7 @@ import random
 import requests
 import wikipedia
 import fandom
+from fandom.error import PageError
 from bs4 import BeautifulSoup
 import re
 from aiohttp import ClientSession
@@ -29,6 +30,8 @@ import threading
 import builtins
 from difflib import SequenceMatcher
 
+global BotReady
+BotReady = False
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix="$", intents=intents)
 intents.message_content = True
@@ -55,6 +58,10 @@ def custom_print(*args, **kwargs):
 builtins.print = custom_print
 
 async def bot_behavior(message):
+    embed = await get_embed(message)
+    message.content = message.content + embed
+    if ResolveMentionsToUserNames or ResolveMentionsToDisplayNames:
+        message.content = await resolve_users(message)
     if MessageDebug:
         print('_________v_CHAT MESSAGE_v_________')
         if message.channel:
@@ -80,6 +87,11 @@ async def bot_behavior(message):
             )
             print(f"Added message to '{ContextFolderLocation}\\users\\{message.author.name}.txt")
 
+    # Check if the bot is ready
+    if BotReady == False:
+        if MessageDebug:
+            print("No Response: Bot is not ready")
+        return False
     # Check if the author is blocked
     if (message.author.id in BlockedUsers or message.author.name in BlockedUsers):
         if MessageDebug:
@@ -183,59 +195,67 @@ async def bot_answer(message):
     Memory = ""
     History = ""
     DDGSearchResultsString = ""
-    WebResults = f"[Current UTC Unix time: {int(time.time())}][Current UTC time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
-    WebResults = WebResults + "[Use this internet data to help you respond] "
+    WebResults = f"Internal System: the current UTC Unix time is '{int(time.time())}' which in date and time format is '{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'\n"
+    WebResults = WebResults + "Internal System: [Results of a quick Internet Search] "
     user_input = functions.clean_user_message(client,message.clean_content)
-    if isinstance(message.channel, discord.TextChannel):
-        print(f"{message.channel.name} | {UserName}: {user_input}")
-    else:
-        print(f"DM | {UserName}: {user_input}")
     # Log the received message
-    await functions.write_to_log(f"Received message from {UserName}: {user_input}")
+    await functions.write_to_log(LogFileLocation,LogFileName,f"Received message from {UserName}: {user_input}")
     # Is this an image request?
     image_request = functions.check_for_image_request(user_input)
     character = functions.get_character(character_card)
     if image_request and (message.author.id in DiscordAccounts or message.author.name in DiscordAccounts):
         prompt = await functions.create_image_prompt(user_input, character, text_api)
     else:
-        if ResolveMentionsToUserNames or ResolveMentionsToDisplayNames:
-            await resolve_mentions(message)
         reply = await get_reply(message)
-        embed = await get_embed(message)
-        message.content = embed + message.content
-        if UserMemoryAmount:
-            UserMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
-            Memory = UserMemory + Memory
-        if ChannelMemoryAmount and message.guild:
+        if GuildMemoryToggle and message.guild:
+            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
+            Memory =  Memory + GuildMemory
+        if ChannelMemoryToggle and message.guild:
             if ChannelHistoryOverride: ChannelName = ChannelHistoryOverride
             else: ChannelName = message.channel.name
             ChannelMemory = str(await functions.get_channel_memory(message.guild.name, ChannelName, ChannelMemoryAmount))
-            Memory = ChannelMemory + Memory
-        if GuildMemoryAmount and message.guild:
-            GuildMemory = str(await functions.get_guild_memory(message.guild, GuildMemoryAmount))
-            Memory =  GuildMemory + Memory
-        if (UserHistoryAmount or UserHistoryAmountifDM):
-            if isinstance(message.channel, discord.DMChannel) and UserHistoryAmountifDM:
-                UserHistory = str(await functions.get_user_history(user, UserHistoryAmountifDM))
-            else:
-                UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
-            History = UserHistory + History
-        if ChannelHistoryAmount and message.guild:
+            Memory = Memory + ChannelMemory
+        if PullUserMemoryFromID:
+            MentionedMemory = str(await get_mentioned_memory(message))
+            Memory = Memory + MentionedMemory
+        if UserMemoryToggle:
+            UserMemory = str(await functions.get_user_memory(user, UserMemoryAmount))
+            Memory = Memory + UserMemory
+        if ChannelHistoryToggle and message.guild:
             if ChannelHistoryOverride:
                 ChannelName = ChannelHistoryOverride
             else:
                 ChannelName = message.channel.name
             ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
-            History = f"[Chat log for channel '{message.channel.name}' begins] " + ChannelHistory + f" [Chat log for channel '{message.channel.name}' ends]" + History
+            History = History + f"[#'{message.channel.name}' begins] " + ChannelHistory + f" [#'{message.channel.name}' ends]"
+        if isinstance(message.channel, discord.DMChannel) and UserHistoryAmountifDM:
+            UserHistory = str(await functions.get_user_history(user, UserHistoryAmountifDM))
+            History = History + UserHistory
+        if PullUserHistoryFromID:
+            MentionedHistory = str(await get_mentioned_history(message))
+            History = History + MentionedHistory
+        if UserHistoryToggle and not isinstance(message.channel, discord.DMChannel):
+            UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
+            History = History + UserHistory
         if DuckDuckGoSearch:
             max_results = 0
-            if not TriggerWordRequiredForSearch:
+            if not TriggerWordRequiredForSearch or TriggerCharacterRequiredForSearch:
                 max_results = DuckDuckGoMaxSearchResults
             elif TriggerWordRequiredForSearch:
-                    if any(word in message.content.lower() for word in ["who", "what", "why", "when", "where", "search", "google", "bing", "how", "which", "find", "info", "analyze"]):
-                        if MessageDebug:
-                            print(f"Web Search Trigger Word found")
-                        max_results = DuckDuckGoMaxSearchResults
+                if any(word in message.content.lower() for word in ["search", "google", "bing", "ddg", "duckduckgo", "internet"]):
+                    if MessageDebug:
+                        print(f"Web Search Trigger Word found")
+                    max_results = DuckDuckGoMaxSearchResults
+                else:
+                    max_results = 0
+            elif TriggerCharacterRequiredForSearch:
+                # Check if the message starts or ends with a trigger character
+                if message.content.startswith(TriggerCharacterRequiredForSearch) or message.content.endswith(TriggerCharacterRequiredForSearch):
+                    if MessageDebug:
+                        print(f"Search Trigger {TriggerCharacterRequiredForSearch} found at start or end of message")
+                    max_results = DuckDuckGoMaxSearchResults
+                else:
+                    max_results = 0 
             if DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
                 if MessageDebug:
                     print(f"inurl: or intitle: found")
@@ -243,7 +263,7 @@ async def bot_answer(message):
             if message.content.startswith("!"):
                     max_results = 0
             if max_results > 0:
-                DDQSearchQuery = "inurl:wiki inurl:news" + message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d')
+                DDQSearchQuery = "inurl:wiki inurl:news inurl:guide" + message.content.split('\n')[0] + " " + reply[:50] + " " + datetime.datetime.now().strftime('%Y/%m/%d')
                 try:
                     DDGSearchResults = DDGS().text(DDQSearchQuery, 
                                 max_results=max_results, safesearch='off', region='us-en', backend='api')
@@ -251,7 +271,7 @@ async def bot_answer(message):
                         f"[{result['href']} | {result['body']}]"
                         for i, result in enumerate(DDGSearchResults)
                     ]
-                    DDGSearchResultsString = '\n'.join(DDGSearchResultsList)
+                    DDGSearchResultsString = ' '.join(DDGSearchResultsList)
                     WebResults = WebResults + DDGSearchResultsString
                     if MessageDebug:
                         print(f"DuckDuckGo Search Results:\n{DDGSearchResultsString}")
@@ -281,7 +301,7 @@ async def bot_answer(message):
                             sentences = p_text.split('. ')
                             for sentence in sentences:
                                 similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                                if similarity > 0.2 or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):
+                                if similarity > WebpageSimilarity or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):
                                     if MessageDebug:
                                         print(f"Similarity: {round(similarity, 2)} | {sentence}")
                                     similarity_scores.append((sentence, similarity))
@@ -305,13 +325,13 @@ async def bot_answer(message):
                 for Link in Links:
                     LinkDecoded = unquote(Link)
                     try:
-                        LinkPage = wikipedia.page(LinkDecoded)
+                        LinkPage = wikipedia.page(Link)
                         LinkPageSentences = LinkPage.content.split('. ')
                         LinkPageSentencesArray = [sentence.strip() for sentence in LinkPageSentences]
                         RelevantSentences = []
                         for sentence in LinkPageSentencesArray:
                             similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                            if similarity >= 0.2 or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
+                            if similarity >= WikipediaSimilarity or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
                                 if MessageDebug:
                                     print(f"Similarity: {round(similarity, 2)} | {sentence}")
                             RelevantSentences.append(sentence)
@@ -324,19 +344,19 @@ async def bot_answer(message):
                         print(f"An error occurred while extracting from Wikipedia: {e}")
             pass
         if AllowFandomExtracts:
-            Links = re.findall(r'fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
+            Links = re.findall(r'(https?://)?(\w+)\.fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
             if Links:
                 RelevantSentencesTrimmed = ""
                 for Link in Links:
-                    LinkDecoded = unquote(Link)
+                    protocol, subdomain, title = Link
                     try:
-                        LinkPage = fandom.page(LinkDecoded)
+                        LinkPage = fandom.page(title=title, wiki=subdomain)
                         LinkPageSentences = LinkPage.content.split('. ')
                         LinkPageSentencesArray = [sentence.strip() for sentence in LinkPageSentences]
                         RelevantSentences = []
                         for sentence in LinkPageSentencesArray:
                             similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                            if similarity >= 0.2 or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
+                            if similarity >= FandomSimilarity or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
                                 if MessageDebug:
                                     print(f"Similarity: {round(similarity, 2)} | {sentence}")
                             RelevantSentences.append(sentence)
@@ -345,15 +365,21 @@ async def bot_answer(message):
                         if MessageDebug:
                             print(f"[Fandom article scraped: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]")
                         WebResults = WebResults + f"[Fandom: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]"
-                    except Exception as e:
-                        print(f"An error occurred while extracting from Fandom: {e}")
+                    except AttributeError:
+                        print(f"Fandom Error: {LinkDecoded}")
+                        # Handle the error (e.g., skip this page)
+                    except PageError as e:
+                        print(f"An error occurred while extracting from Fandom: {e}")    
             pass
-        WebResults = WebResults + "[End of Web Results]\n"
+        WebResults = WebResults + "Internal System: [End of Internet Search]\n"
         Memory = "" if Memory is None else Memory
         History = "" if History is None else History
         WebResults = "" if WebResults is None else WebResults
         DDGSearchResultsString = "" if DDGSearchResultsString is None else DDGSearchResultsString
         image_request = functions.check_for_image_request(user_input)
+        # If WebResults has at least 1 http link in it, then we have a web result, react with the 🌐 emoji to indicate a websearch was done
+        if WebResults and "http" in WebResults:
+            await message.add_reaction("🌐")
         if GenerateImageOnly and image_request:
             character = ""
             character_card["name"] = ""
@@ -395,13 +421,6 @@ async def bot_answer(message):
     }
 
     queue_to_process_message.put_nowait(queue_item)
-    # Toggle the typing status to the channel so the user knows we're working on it
-    await start_typing_status(message)
-
-async def start_typing_status(message):
-    while not queue_to_process_message.empty():
-        await message.channel.typing()
-        await asyncio.sleep(1)
 
 # If the message is a part of a reply chain, get any messages that are being replied to up to a maximum of 4
 async def get_reply(message):
@@ -438,19 +457,109 @@ async def get_embed(message):
         for i, e in enumerate(message.embeds, 1):
             if e.fields:
                 for field in e.fields:
-                    embed += f"Embed {i} - Field: {field.name}, Value: {field.value} "
-    return embed
+                    embed += f"[Embed {i} - Field: {field.name}, Value: {field.value}] "
+    return str(embed)
 
-# Function to resolve mentions in the message i.e. <@77921824876269568> -> Algy
-async def resolve_mentions(message):
+# Function to resolve users in the message i.e. <@77921824876269568> -> Algy
+# Also include 18 digit user IDs
+async def resolve_users(message):
     for user in message.mentions:
-        if user.nick and ResolveMentionsToDisplayNames:
-            message.content = message.content.replace(f"<@!{user.id}>", user.nick)
-            message.content = message.content.replace(f"<@{user.id}>", user.nick)
+        if MessageDebug:
+            print(f"Resolving user {user.name} ({user.id})")
+        if ResolveMentionsToDisplayNames: # Note: if they have no nickname, this will return their username
+            message.content = message.content.replace(f"<@!{user.id}>", user.display_name)
+            message.content = message.content.replace(f"<@{user.id}>", user.display_name)
+            message.content = message.content.replace(f"<{user.id}>", user.display_name)
+            message.content = message.content.replace(f"{user.id}", user.display_name)
         elif ResolveMentionsToUserNames:
             message.content = message.content.replace(f"<@!{user.id}>", user.name)
             message.content = message.content.replace(f"<@{user.id}>", user.name)
+            message.content = message.content.replace(f"<{user.id}>", user.name)
+            message.content = message.content.replace(f"{user.id}", user.name)
+    ids = re.findall(r'(?<!:)\b\d{18}\b', message.content)
+    for id in ids:
+        if message.guild is None:
+            print("Cannot fetch members in a DM")
+            continue
+        try:
+            User = await message.guild.fetch_member(int(id))
+        except discord.NotFound:
+            print(f"No member found with ID {id}")
+            continue
+        except discord.HTTPException as e:
+            print(f"Failed to fetch member with ID {id}: {e}")
+            continue
+        if User is None:
+            print(f"Failed to fetch member with ID {id}")
+            continue
+        if MessageDebug:
+            print(f"Resolving user {User.name} ({User.id})")
+        if ResolveMentionsToDisplayNames: # Note: if they have no nickname, this will return their username
+            message.content = message.content.replace(f"<!@{id}>", User.display_name)
+            message.content = message.content.replace(f"<@{id}>", User.display_name)
+            message.content = message.content.replace(f"<{id}>", User.display_name)
+            message.content = message.content.replace(f"{id}", User.display_name)
+        elif ResolveMentionsToUserNames:
+            message.content = message.content.replace(f"<!@{id}>", User.name)
+            message.content = message.content.replace(f"<@{id}>", User.name)
+            message.content = message.content.replace(f"<{id}>", User.name)
+            message.content = message.content.replace(f"{id}", User.name)
     return message.content
+
+# Gets any mentioned user and pulls their history
+# Also catch 18 digit user IDs
+async def get_mentioned_history(message):
+    Mentioned_History = []
+    for user in message.mentions:
+        User_History = await functions.get_user_history(user, UserHistoryAmount)
+        Mentioned_History.append(User_History)
+    MentionedHistory = ' '.join(Mentioned_History)
+    ids = re.findall(r'\b\d{18}\b', message.content)
+    for id in ids:
+        if message.guild is None:
+            print("Cannot fetch members in a DM")
+            continue
+        try:
+            User = await message.guild.fetch_member(int(id))
+        except discord.NotFound:
+            print(f"No member found with ID {id}")
+            continue
+        except discord.HTTPException as e:
+            print(f"Failed to fetch member with ID {id}: {e}")
+            continue
+        if User is None:
+            print(f"Failed to fetch member with ID {id}")
+            continue
+        User_History = await functions.get_user_history(User, UserHistoryAmount)
+        Mentioned_History.append(User_History)
+    MentionedHistory = ' '.join(Mentioned_History)
+    return MentionedHistory
+async def get_mentioned_memory(message):
+    Mentioned_Memory = []
+    for user in message.mentions:
+        User_Memory = await functions.get_user_memory(user, UserMemoryAmount)
+        Mentioned_Memory.append(User_Memory)
+    MentionedMemory = ' '.join(Mentioned_Memory)
+    ids = re.findall(r'\b\d{18}\b', message.content)
+    for id in ids:
+        if message.guild is None:
+            print("Cannot fetch members in a DM")
+            continue
+        try:
+            User = await message.guild.fetch_member(int(id))
+        except discord.NotFound:
+            print(f"No member found with ID {id}")
+            continue
+        except discord.HTTPException as e:
+            print(f"Failed to fetch member with ID {id}: {e}")
+            continue
+        if User is None:
+            print(f"Failed to fetch member with ID {id}")
+            continue
+        User_Memory = await functions.get_user_memory(User, UserMemoryAmount)
+        Mentioned_Memory.append(User_Memory)
+    return MentionedMemory
+        
 
 async def handle_llm_response(content, response):
     try:
@@ -466,7 +575,7 @@ async def handle_llm_response(content, response):
         else:
             queue_to_send_message.put_nowait(queue_item)
     except json.JSONDecodeError:
-        await functions.write_to_log(
+        await functions.write_to_log(LogFileLocation,LogFileName,
             "Invalid JSON response from LLM model: " + str(response)
         )
 
@@ -487,23 +596,28 @@ async def is_valid_response(content, response_text):
     if MessageDebug:
         print("Checking if response is valid")
     # Define the pattern to search for
-    Pattern_EmptyMessage = r'[@<>\[\]]'
-    Pattern_BotCardName = r'^@' + re.escape(character_card['name']) + r'$'
-    Pattern_UserUsername = r'^@' + re.escape(content['user'].name) + r'$'
-    Pattern_UserDisplayName = r'^@' + re.escape(content['user'].display_name) + r'$'
-    Pattern_BotDisplayName = r'^@' + re.escape(content['bot'].display_name) + r'$'
-    Pattern_BotUsername = r'^@' + re.escape(content['bot'].name) + r'$'
+    Pattern_BotCardName = r'\n' + re.escape(str(character_card['name'])) + r':$'
+
+    Pattern_UserUsername = r'\n' + re.escape(str(content['user'].name)) + r':$'
+    Pattern_BotUsername = r'\n' + re.escape(str(content['bot'].name)) + r':$'
+
+    Pattern_UserDisplayName = r'\n' + re.escape(str(content['user'].display_name)) + r':$'
+    Pattern_BotDisplayName = r'\n' + re.escape(str(content['bot'].display_name)) + r':$'
+
+    Pattern_UserID = r'\n@' + re.escape(str(content['user'].id)) + r'$'
+    Pattern_BotID = r'\n@' + re.escape(str(content['bot'].id)) + r'$'
 
     # Check if the response text matches the pattern
     if (
         response_text.strip() is None or response_text.strip() == ""
-        or re.search(Pattern_EmptyMessage, response_text[:16], re.IGNORECASE)
+        or ("[chat log") in response_text.strip().lower()
         or re.match(Pattern_BotCardName, response_text[:16], re.IGNORECASE)
         or re.match(Pattern_UserUsername, response_text[:16], re.IGNORECASE)
         or re.match(Pattern_UserDisplayName, response_text[:16], re.IGNORECASE)
         or re.match(Pattern_BotDisplayName, response_text[:16], re.IGNORECASE)
         or re.match(Pattern_BotUsername, response_text[:16], re.IGNORECASE)
-        or re.search(r'(?i)chat log for channel', response_text, re.IGNORECASE)
+        or re.match(Pattern_UserID, response_text[:16], re.IGNORECASE)
+        or re.match(Pattern_BotID, response_text[:16], re.IGNORECASE)
     ):
         return False
     if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
@@ -512,6 +626,19 @@ async def is_valid_response(content, response_text):
         print("Response is valid")
     return True
 
+# Function to send the prompt to the LLM model and return the response_data
+async def send_to_model(content):
+    global text_api
+    async with aiohttp.ClientSession() as session:
+        response_data = await send_api_request(
+            session,
+            text_api["address"] + text_api["generation"],
+            text_api["headers"],
+            content["prompt"],
+        )
+        return response_data
+
+# Function to send the prompt to the LLM model and handle the response as a reply to a message
 async def send_to_model_queue():
     global text_api
     while True:
@@ -525,7 +652,7 @@ async def send_to_model_queue():
                 content["user"]
             )
         # Log the API request
-        await functions.write_to_log(
+        await functions.write_to_log(LogFileLocation,LogFileName,
             f"Sending API request to LLM model: {content['prompt']}"
         )
         async with aiohttp.ClientSession() as session:
@@ -539,11 +666,15 @@ async def send_to_model_queue():
                         content["prompt"],
                     )
                     # Log the API response
-                    await functions.write_to_log(
+                    await functions.write_to_log(LogFileLocation,LogFileName,
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
-                    if await is_valid_response(content, response_text):
+                    # If the response is short and ends with a colon, it's probably triggered it's stop_sequence instantly
+                    if len(response_text) < 20 and (response_text[-1] == ":" or response_text[-2] == ":"):
+                        retry_count += 0.1 # Only increase the retry count by 0.1 because hasn't been a full attempt and costs very little to keep trying
+                        continue
+                    elif await is_valid_response(content, response_text):
                         await handle_llm_response(content, response_data)
                         queue_to_process_message.task_done()
                         break
@@ -555,7 +686,7 @@ async def send_to_model_queue():
                     print(f"Error occurred: {e}")
                     retry_count += 1
             if retry_count >= 3:
-                response_text = 'Could not generate a response correctly after 3 attempts. Please try again or use a different prompt.'
+                response_text = 'Failed to generate a response correctly after multiple attempts. Please try again or use a different prompt.'
                 await content["message"].remove_reaction(ReactionEmoji, client.user)
                 print('text: ' + response_text)
                 await content['message'].reply(response_text)
@@ -569,7 +700,7 @@ async def send_to_stable_diffusion_queue():
             data = image_api["parameters"]
             data["prompt"] += image_prompt["response"]
             data_json = json.dumps(data)
-            await functions.write_to_log(
+            await functions.write_to_log(LogFileLocation,LogFileName,
                 "Sending prompt from "
                 + image_prompt["content"]["username"]
                 + " to Stable Diffusion model."
@@ -589,7 +720,7 @@ async def send_to_stable_diffusion_queue():
                     queue_to_send_message.put_nowait(queue_item)
                     queue_to_process_image.task_done()
         except Exception as e:
-            await functions.write_to_log(f"Error processing image: {str(e)}")
+            await functions.write_to_log(LogFileLocation,LogFileName,f"Error processing image: {str(e)}")
             # Handle the error here
             pass
 
@@ -644,6 +775,8 @@ async def on_ready():
     print(
         f"Discord Bot is up and running on the bot: "+client.user.name+"#"+client.user.discriminator+" ("+str(client.user.id)+")"
     )
+    global BotReady
+    BotReady = True
     global text_api
     global image_api
     global character_card
@@ -653,7 +786,7 @@ async def on_ready():
     api_check = await functions.api_status_check(
         text_api["address"] + text_api["model"], headers=text_api["headers"]
     )
-    character_card = await functions.get_character_card("default.json")
+    character_card = await functions.get_character_card(CharacterCardFile)
     # AsynchIO Tasks
     asyncio.create_task(send_to_model_queue())
     asyncio.create_task(send_to_stable_diffusion_queue())
@@ -854,8 +987,6 @@ configuration = app_commands.Group(
     name="view", description="View the bot's current configuration."
 )
 async def view_configuration(interaction):
-    # Reload the config.py module to get updated values
-    importlib.reload(config)
     # List the current configuration settings
     # Settings listed are: ResponseMaxLength, GuildMemoryAmount, ChannelMemoryAmount, UserMemoryAmount, ChannelHistoryAmount,
     # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowFandomExtracts,
@@ -892,7 +1023,6 @@ async def view_configuration(interaction):
             "You do not have permission to reload the bot's configuration."
         )
         return
-
     # Reload the config.py module to get updated values
     importlib.reload(config)
     # Let the user know that their request has been completed
