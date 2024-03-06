@@ -29,7 +29,7 @@ To run this bot:
 3. Open config.py and add your bot's API key
 4. Install the requirements. I suggest using an Anaconda or Miniconda instance.
     ```pip install -r requirements.txt```
-5. Run the bot with `python bot.py`
+5. Run the bot with `python DiscordBot.py`
 
 Cheers!
 
