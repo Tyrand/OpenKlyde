@@ -14,8 +14,6 @@ import profanity_check
 import random
 import requests
 import wikipedia
-import fandom
-from fandom.error import PageError
 from bs4 import BeautifulSoup
 import re
 from aiohttp import ClientSession
@@ -285,7 +283,7 @@ async def bot_answer(message):
             }
             for WebLink in WebLinks:
                 WebLinkDecoded = unquote(WebLink)
-                if "wikipedia.org" not in WebLinkDecoded and "fandom.com" not in WebLinkDecoded:
+                if "wikipedia.org" not in WebLinkDecoded:
                     try:
                         RelevantSentences = []
                         response = requests.get(WebLinkDecoded, headers=WebScrapeHeaders)
@@ -342,34 +340,6 @@ async def bot_answer(message):
                         WebResults = WebResults + f"[Wikipedia: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]"
                     except Exception as e:
                         print(f"An error occurred while extracting from Wikipedia: {e}")
-            pass
-        if AllowFandomExtracts:
-            Links = re.findall(r'(https?://)?(\w+)\.fandom.com/wiki/([^\s>]+)', message.content + " " + DDGSearchResultsString)
-            if Links:
-                RelevantSentencesTrimmed = ""
-                for Link in Links:
-                    protocol, subdomain, title = Link
-                    try:
-                        LinkPage = fandom.page(title=title, wiki=subdomain)
-                        LinkPageSentences = LinkPage.content.split('. ')
-                        LinkPageSentencesArray = [sentence.strip() for sentence in LinkPageSentences]
-                        RelevantSentences = []
-                        for sentence in LinkPageSentencesArray:
-                            similarity = SequenceMatcher(None, sentence, message.content).ratio()
-                            if similarity >= FandomSimilarity or any(year in sentence for year in ["2022", "2023", "2024", "2025"]):  # Adjust the threshold and years as needed
-                                if MessageDebug:
-                                    print(f"Similarity: {round(similarity, 2)} | {sentence}")
-                            RelevantSentences.append(sentence)
-                        RelevantSentences.sort(key=lambda x: SequenceMatcher(None, x, message.content).ratio(), reverse=True)
-                        RelevantSentencesTrimmed = ' '.join(RelevantSentences)[:FandomExtractLength]
-                        if MessageDebug:
-                            print(f"[Fandom article scraped: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]")
-                        WebResults = WebResults + f"[Fandom: {LinkDecoded} | {str(RelevantSentencesTrimmed)}]"
-                    except AttributeError:
-                        print(f"Fandom Error: {LinkDecoded}")
-                        # Handle the error (e.g., skip this page)
-                    except PageError as e:
-                        print(f"An error occurred while extracting from Fandom: {e}")    
             pass
         WebResults = WebResults + "Internal System: [End of Internet Search]\n"
         Memory = "" if Memory is None else Memory
@@ -989,7 +959,7 @@ configuration = app_commands.Group(
 async def view_configuration(interaction):
     # List the current configuration settings
     # Settings listed are: ResponseMaxLength, GuildMemoryAmount, ChannelMemoryAmount, UserMemoryAmount, ChannelHistoryAmount,
-    # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired, AllowFandomExtracts,
+    # UserHistoryAmount, AllowDirectMessages, UserRateLimitSeconds, ReplyToBots, MentionOrReplyRequired,
     # SpecificGuildMode, SpecificGuildModeIDs, SpecificGuildModeNames, SpecificChannelMode, SpecificChannelModeIDs, SpecificChannelModeNames
     await interaction.response.send_message(
         "The bot's current configuration is as follows:\n" + 
@@ -1004,7 +974,6 @@ async def view_configuration(interaction):
         "Reply to Bots: " + str(ReplyToBots) + "\n" +
         "Mention or Reply Required: " + str(MentionOrReplyRequired) + "\n" +
         "Wikipedia Scraping: " + str(AllowWikipediaExtracts) + "\n" +
-        "Fandom.com Scraping: " + str(AllowFandomExtracts) + "\n" +
         "General Internet Scraping: " + str(AllowWebpageScraping) + "\n" +
         "Specific Guilds: " + str(SpecificGuildMode) + " | " +
         str(SpecificGuildModeIDs) + " " + str(SpecificGuildModeNames) + "\n" +
