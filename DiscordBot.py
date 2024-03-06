@@ -71,19 +71,18 @@ async def bot_behavior(message):
                 MessageGuild = message.guild.name
         print(MessageGuild + " | " + MessageChannel + " | " + message.author.name + ": " + message.content)
     if LogAllMessagesToChannelHistory:
-        # Log the message to the channel history
+        # Log the message to the channel's context file
         if message.guild:
             await functions.add_to_channel_history(
                 message.guild, message.channel, message.author, message.content
             )
             print(f"Added message to '{ContextFolderLocation}\\guilds\\{message.guild.name}\\{message.channel.name}.txt'")
     if LogAllMessagesToUserHistory:
-        # Log the message to the channel history
-        if message.guild:
-            await functions.add_to_user_history(
-                message.content, message.author, message.author
-            )
-            print(f"Added message to '{ContextFolderLocation}\\users\\{message.author.name}.txt")
+    # Log the message to the user's context file
+        await functions.add_to_user_history(
+            message.content, message.author, message.author
+        )
+        print(f"Added message to '{ContextFolderLocation}\\users\\{message.author.name}.txt")
 
     # Check if the bot is ready
     if BotReady == False:
@@ -180,11 +179,11 @@ async def bot_answer(message):
         last_message_time[message.author.id] = time.time()
     if DenyProfanityInput:
         # Deny the prompt if it doesn't pass the profanity filter
-        keywords = ["ethical", "guidelines", "authori", "permission", "consent", "appro", "allow"]
-        if (profanity_check.predict_prob([message.content])>=ProfanityRating) or (len([keyword for keyword in keywords if keyword in message.content.lower()]) >= 2):
+        if (profanity_check.predict_prob([message.content])>=ProfanityRating):
             await message.add_reaction(ProfanityEmoji)
             return False
     await message.add_reaction(ReactionEmoji)
+    asyncio.create_task(RateLimitNotice(message))
     user = message.author
     userID = message.author.id
     UserName = message.author.name
@@ -193,8 +192,8 @@ async def bot_answer(message):
     Memory = ""
     History = ""
     DDGSearchResultsString = ""
-    WebResults = f"Internal System: the current UTC Unix time is '{int(time.time())}' which in date and time format is '{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'\n"
-    WebResults = WebResults + "Internal System: [Results of a quick Internet Search] "
+    WebResults = f"\nTyrandBot: current UTC Unix time is '{int(time.time())}' which in date and time format is '{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'\n"
+    WebResults = WebResults + "\nTyrandBot: [Results of a quick Internet Search]"
     user_input = functions.clean_user_message(client,message.clean_content)
     # Log the received message
     await functions.write_to_log(LogFileLocation,LogFileName,f"Received message from {UserName}: {user_input}")
@@ -225,35 +224,33 @@ async def bot_answer(message):
             else:
                 ChannelName = message.channel.name
             ChannelHistory = str(await functions.get_channel_history(message.guild.name, ChannelName, ChannelHistoryAmount))
-            History = History + f"[#'{message.channel.name}' begins] " + ChannelHistory + f" [#'{message.channel.name}' ends]"
+            History = History + ChannelHistory
         if isinstance(message.channel, discord.DMChannel) and UserHistoryAmountifDM:
             UserHistory = str(await functions.get_user_history(user, UserHistoryAmountifDM))
             History = History + UserHistory
         if PullUserHistoryFromID:
             MentionedHistory = str(await get_mentioned_history(message))
             History = History + MentionedHistory
-        if UserHistoryToggle and not isinstance(message.channel, discord.DMChannel):
+        if UserHistoryToggleifDM and not isinstance(message.channel, discord.DMChannel):
             UserHistory = str(await functions.get_user_history(user, UserHistoryAmount))
             History = History + UserHistory
         if DuckDuckGoSearch:
             max_results = 0
-            if not TriggerWordRequiredForSearch or TriggerCharacterRequiredForSearch:
+            if not TriggerWordRequiredForSearch and not TriggerCharacterRequiredForSearch:
                 max_results = DuckDuckGoMaxSearchResults
             elif TriggerWordRequiredForSearch:
                 if any(word in message.content.lower() for word in ["search", "google", "bing", "ddg", "duckduckgo", "internet"]):
                     if MessageDebug:
                         print(f"Web Search Trigger Word found")
                     max_results = DuckDuckGoMaxSearchResults
-                else:
-                    max_results = 0
             elif TriggerCharacterRequiredForSearch:
                 # Check if the message starts or ends with a trigger character
                 if message.content.startswith(TriggerCharacterRequiredForSearch) or message.content.endswith(TriggerCharacterRequiredForSearch):
                     if MessageDebug:
                         print(f"Search Trigger {TriggerCharacterRequiredForSearch} found at start or end of message")
                     max_results = DuckDuckGoMaxSearchResults
-                else:
-                    max_results = 0 
+            else:
+                max_results = 0
             if DuckDuckGoMaxSearchResultsWithParams and ("inurl:" in message.content or "intitle:" in message.content):
                 if MessageDebug:
                     print(f"inurl: or intitle: found")
@@ -341,7 +338,7 @@ async def bot_answer(message):
                     except Exception as e:
                         print(f"An error occurred while extracting from Wikipedia: {e}")
             pass
-        WebResults = WebResults + "Internal System: [End of Internet Search]\n"
+        WebResults = WebResults + "\nTyrandBot: [End of Internet Search]\n"
         Memory = "" if Memory is None else Memory
         History = "" if History is None else History
         WebResults = "" if WebResults is None else WebResults
@@ -349,7 +346,7 @@ async def bot_answer(message):
         image_request = functions.check_for_image_request(user_input)
         # If WebResults has at least 1 http link in it, then we have a web result, react with the 🌐 emoji to indicate a websearch was done
         if WebResults and "http" in WebResults:
-            await message.add_reaction("🌐")
+            await message.add_reaction(WebSearchEmoji)
         if GenerateImageOnly and image_request:
             character = ""
             character_card["name"] = ""
@@ -481,11 +478,15 @@ async def resolve_users(message):
 async def get_mentioned_history(message):
     Mentioned_History = []
     for user in message.mentions:
+        if user.id == client.user.id:
+            continue
         User_History = await functions.get_user_history(user, UserHistoryAmount)
         Mentioned_History.append(User_History)
     MentionedHistory = ' '.join(Mentioned_History)
     ids = re.findall(r'\b\d{18}\b', message.content)
     for id in ids:
+        if id == str(client.user.id):
+            continue
         if message.guild is None:
             print("Cannot fetch members in a DM")
             continue
@@ -533,6 +534,8 @@ async def get_mentioned_memory(message):
 
 async def handle_llm_response(content, response):
     try:
+        if ResponseDebug:
+            print("Received response from LLM model. Length:", len(response))
         llm_response = response
         data = extract_data_from_response(llm_response)
         llm_message = await functions.clean_llm_reply(
@@ -563,7 +566,7 @@ async def send_api_request(session, url, headers, data):
         return await response.json()
 
 async def is_valid_response(content, response_text):
-    if MessageDebug:
+    if ResponseDebug:
         print("Checking if response is valid")
     # Define the pattern to search for
     Pattern_BotCardName = r'\n' + re.escape(str(character_card['name'])) + r':$'
@@ -592,7 +595,7 @@ async def is_valid_response(content, response_text):
         return False
     if DenyProfanityOutput and profanity_check.predict([response_text])[0] >= ProfanityRating:
         return False
-    if MessageDebug:
+    if ResponseDebug:
         print("Response is valid")
     return True
 
@@ -625,6 +628,9 @@ async def send_to_model_queue():
         await functions.write_to_log(LogFileLocation,LogFileName,
             f"Sending API request to LLM model: {content['prompt']}"
         )
+        
+        if ResponseDebug:
+            print("Sending API request to LLM model")
         async with aiohttp.ClientSession() as session:
             retry_count = 0
             while retry_count < 3:
@@ -1068,6 +1074,9 @@ async def on_message(message):
 
 interrupt_count = 0
 
+restart_attempts = 0
+max_restart_attempts = 5
+
 try:
     client.run(discord_api_key)
 except KeyboardInterrupt:
@@ -1075,9 +1084,13 @@ except KeyboardInterrupt:
     print("KeyboardInterrupt detected, do it again to exit.")
     if interrupt_count >= 2:
         raise
-except BaseException as e:
+except Exception as e:  # Catch general exceptions
     client.close()
-    asyncio.sleep(1)  # Add a 10 second delay
-    client.run(discord_api_key)
+    asyncio.sleep(10)  # Add a 10 second delay
     print(f"An error occurred: {e}")
-    print("Bot restarted successfully.")
+    restart_attempts += 1
+    if restart_attempts <= max_restart_attempts:
+        print("Bot restarted successfully.")
+        asyncio.create_task(client.start(discord_api_key))
+    else:
+        print("Max restart attempts reached. Exiting.")

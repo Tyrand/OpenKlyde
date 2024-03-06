@@ -270,9 +270,9 @@ async def add_to_user_history(content, user, file):
     # Add message to user's conversation history
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     message = f"{user.name}: {content}\n"
-    file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{user.name}.txt")
+    file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{file.name}.txt")
     stamped_message = f"{timestamp} {user.name}: {content}\n"
-    stamped_file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{user.name}-stamped.txt")
+    stamped_file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{file.name}-stamped.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
     if AddTimestamp and TimestampSeperateFile:
@@ -349,6 +349,8 @@ def clean_user_message(client, user_input):
     return pattern.sub("", user_input).strip()
 
 async def clean_llm_reply(message, user, bot):
+    if ResponseDebug:
+        print(f"Attemping to clean message for {user.name}")
     # Clean generated reply
     bot_lower, user_name_lower = bot.lower(), user.name.lower()
     pattern = re.compile(
@@ -373,6 +375,8 @@ async def clean_llm_reply(message, user, bot):
                 cleaned_message = cleaned_message.replace(f"<{id}>", user.name)
                 cleaned_message = cleaned_message.replace(f"{id}", user.name)
     cleaned_message = re.sub(r"\n{2,}", "\n", cleaned_message)  # Replace consecutive line breaks with a single line break
+    if ResponseDebug:
+        print("Message was successfully cleaned.")
     return cleaned_message.strip()
 
 def get_character(character_card):
@@ -396,6 +400,12 @@ def get_file_list(directory):
     except OSError:
         files = []
     return files
+
+# Script to add an ratelimit reaction emoji then remove it when the ratelimit is over
+async def RateLimitNotice(message):
+    await message.add_reaction(RateLimitedEmoji)
+    await asyncio.sleep(UserRateLimitSeconds)
+    await message.remove_reaction(RateLimitedEmoji, message.guild.me)
 
 def image_from_string(image_string):
     # Create an image from a base64-encoded string
