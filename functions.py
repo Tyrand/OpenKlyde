@@ -12,7 +12,10 @@ from config import *
 from bs4 import BeautifulSoup
 import wikipedia
 from collections import deque
+import logging
+from pathlib import Path
 import nltk
+import aiohttp
 from nltk.metrics import edit_distance
 
 async def set_api(config_file):
@@ -21,74 +24,84 @@ async def set_api(config_file):
     api = {}  # Initialize the api variable
     
     try:
-        with open(file, "r") as json_file:
+        with open(file, "r", encoding='utf-8') as json_file:
             api.update(json.load(json_file))
+    except FileNotFoundError:
+        write_to_log(LogFileLocation, LogFileName, f"File {file} not found.")
+    except json.JSONDecodeError:
+        write_to_log(LogFileLocation, LogFileName, f"Unable to parse {file} as JSON.")
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,f"An unexpected error occurred: {e}")
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred: {e}")
 
     return api
 
 async def api_status_check(link, headers):
     # Check if any API is running
-    try:
-        response = requests.get(link, headers=headers)
-        status = response.ok
-    except requests.exceptions.RequestException as e:
-        await write_to_log(LogFileLocation,LogFileName,
-            "Error occurred: " + e + ". Language model not currently running."
-        )
-        status = False
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(link, headers=headers) as response:
+                status = response.status == 200
+        except aiohttp.ClientError as e:
+            write_to_log(
+                LogFileLocation,
+                LogFileName,
+                f"Error occurred: {type(e).__name__}, {e.args}. Language model not currently running."
+            )
+            status = False
     return status
 
 def get_file_name(directory, file_name):
     # Create file path from name and directory
-    return os.path.join(directory, file_name)
+    return Path(directory) / file_name
 
 async def get_json_file(filename):
     # Read JSON file, return content or None
     try:
-        with open(filename, "r") as file:
+        with open(filename, "r", encoding='utf-8') as file:
             return json.load(file)
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"File {filename} not found.")
+        write_to_log(LogFileLocation, LogFileName, f"File {filename} not found.")
     except json.JSONDecodeError:
-        await write_to_log(LogFileLocation,LogFileName,f"Unable to parse {filename} as JSON.")
+        write_to_log(LogFileLocation, LogFileName, f"Unable to parse {filename} as JSON.")
+    except PermissionError:
+        write_to_log(LogFileLocation, LogFileName, f"Lack of permissions to read {filename}.")
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,f"An unexpected error occurred: {e}")
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred: {str(e)}")
 
     return None
 
-async def write_to_log(LogFileLocation,LogFileName,information):
+def write_to_log(LogFileLocation, LogFileName, information):
     # Write a line to the log file
-    file = get_file_name(f"{LogFileLocation}", f"{LogFileName}")
+    file = get_file_name(LogFileLocation, LogFileName)
     current_time = datetime.now().replace(microsecond=0)
     text = str(current_time) + " " + information + "\n"
-    await append_text_file(file, text)
+    with open(file, 'a', encoding='utf-8') as f:
+        f.write(text)
 
 def check_for_image_request(user_message):
     # Check if user is looking for an image to be generated
     return bool(re.search(r'~(create|generate|draw|show)', user_message, re.IGNORECASE))
 
-
 async def create_text_prompt(user_input, user, character, bot, memory, history, WebResults, reply, text_api):
     # Create a text prompt for text generation
-    prompt = f"{character}{memory}{history}{WebResults}{reply}{user.name}: {user_input}\n{bot}: "
-    stop_sequence = ["You:", f"{user.name}:", f"{bot}:", f"@{bot}"]
-    
-    if text_api["name"] == "openai":
-        data = text_api["parameters"].copy()
-        data.update({"prompt": prompt, "stop": stop_sequence})
-    else:
-        data = text_api["parameters"].copy()
-        data.update({"prompt": prompt, "stop_sequence": stop_sequence})
+    prompt = f"{character}{memory}{history}{WebResults}{reply}{user.name}: {user_input}\n{bot}: Sure, "
+    stop_sequence_key = "stop" if text_api["name"] == "openai" else "stop_sequence"
+    stop_sequence = ["you:", f"{user.name}:", f"{bot}:", f"@{bot}"]
+
+    update_dict = {
+        "prompt": prompt,
+        stop_sequence_key: [seq.lower() for seq in stop_sequence]
+    }
+
+    data = text_api["parameters"].copy()
+    data.update(update_dict)
 
     return json.dumps(data)
-
 
 async def create_image_prompt(user_input, character, text_api):
     # Create an image prompt for image generation
     user_input = user_input.lower()
-    subject = user_input.split("of", 1)[1] if "of" in user_input else f"{character} Please describe yourself in vivid detail."
+    subject = f"{character} Please describe yourself in vivid detail." if "of" not in user_input else user_input.split("of", 1)[1]
     
     prompt = (
         f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n"
@@ -107,10 +120,11 @@ async def get_user_memory(user, characters):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            print("Accessed:", file_path)
+            total_lines = contents.count('\n')
+            print(f"Accessed: {file_path}")
             print(
-                "Total user_memory characters: ",len(contents),
-                " | Total user_memory lines: ",contents.count("\n"),
+                f"Total user_memory characters: {len(contents)}",
+                f" | Total user_memory lines: {total_lines}"
             )
             if characters == 0:
                 print(
@@ -120,17 +134,18 @@ async def get_user_memory(user, characters):
                 return ""
             elif len(contents) > characters:
                 contents = contents[-characters:]
-            trimmed_contents = contents.strip()
-            print(
-                "Trimmed user_memory characters: ",len(trimmed_contents),
-                " | Trimmed user_memory lines: ",trimmed_contents.count("\n"),
-            )
-            return trimmed_contents
+                trimmed_contents = contents.strip()
+                print(
+                    f"Trimmed user_memory characters: {len(trimmed_contents)}",
+                    f" | Trimmed user_memory lines: {total_lines}",
+                )
+                return trimmed_contents
+            return contents.strip()
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"File {file_path} not found. Where did you lose it?")
+        write_to_log(LogFileLocation, LogFileName, f"File {file_path} not found. Where did you lose it?")
         return ""
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,f"An unexpected error occurred while accessing {file_path}: {e}")
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred while accessing {file_path}: {e}")
         return ""
 
 async def get_guild_memory(guild, characters):
@@ -139,10 +154,11 @@ async def get_guild_memory(guild, characters):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            print("Accessed:", file_path)
+            total_lines = contents.count('\n')
+            print(f"Accessed: {file_path}")
             print(
-                "Total guild_memory characters: ",len(contents),
-                " | Total guild_memory lines: ",contents.count("\n"),
+                f"Total guild_memory characters: {len(contents)}",
+                f" | Total guild_memory lines: {total_lines}",
             )
             if characters == 0:
                 print(
@@ -152,17 +168,18 @@ async def get_guild_memory(guild, characters):
                 return ""
             elif len(contents) > characters:
                 contents = contents[-characters:]
-            trimmed_contents = contents.strip()
-            print(
-                " Trimmed guild_memory characters: ",len(trimmed_contents),
-                " | Trimmed guild_memory lines: ",trimmed_contents.count("\n"),
-            )
-            return trimmed_contents
+                trimmed_contents = contents.strip()
+                print(
+                    f"Trimmed guild_memory characters: {len(trimmed_contents)}",
+                    f" | Trimmed guild_memory lines: {total_lines}",
+                )
+                return trimmed_contents
+            return contents.strip()
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"File {file_path} not found. Where did you lose it?")
+        write_to_log(LogFileLocation, LogFileName, f"File {file_path} not found. Where did you lose it?")
         return ""
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,f"An unexpected error occurred while accessing {file_path}: {e}")
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred while accessing {file_path}: {e}")
         return ""
 
 async def get_channel_memory(GuildName, ChannelName, characters):
@@ -171,10 +188,11 @@ async def get_channel_memory(GuildName, ChannelName, characters):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            print("Accessed: " + file_path)
+            total_lines = contents.count('\n')
+            print(f"Accessed: {file_path}")
             print(
-                "Total channel_memory characters: " + len(contents) +
-                " | Total channel_memory lines: " + contents.count('\n')
+                f"Total channel_memory characters: {len(contents)}",
+                f" | Total channel_memory lines: {total_lines}"
             )
             if characters == 0:
                 print(
@@ -184,17 +202,18 @@ async def get_channel_memory(GuildName, ChannelName, characters):
                 return ""
             elif len(contents) > characters:
                 contents = contents[-characters:]
-            trimmed_contents = contents.strip()
-            print(
-                "Trimmed channel_memory characters: " + len(trimmed_contents) +
-                " | Trimmed channel_memory lines: " + trimmed_contents.count('\n')
-            )
-            return trimmed_contents
+                trimmed_contents = contents.strip()
+                print(
+                    f"Trimmed channel_memory characters: {len(trimmed_contents)}",
+                    f" | Trimmed channel_memory lines: {total_lines}"
+                )
+                return trimmed_contents
+            return contents.strip()
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,"File " + file_path + " not found. Where did you lose it?")
+        write_to_log(LogFileLocation, LogFileName, f"File {file_path} not found. Where did you lose it?")
         return ""
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,"An unexpected error occurred while accessing " + file_path + ": " + str(e))
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred while accessing {file_path}: {str(e)}")
         return ""
 
 async def get_channel_history(GuildName, ChannelName, characters):
@@ -203,10 +222,11 @@ async def get_channel_history(GuildName, ChannelName, characters):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            print("Accessed:", file_path)
+            total_lines = contents.count('\n')
+            print(f"Accessed: {file_path}")
             print(
-                "Total channel_history characters: ",len(contents),
-                " | Total channel_history lines: ",contents.count("\n"),
+                f"Total channel_history characters: {len(contents)}",
+                f" | Total channel_history lines: {total_lines}"
             )
             if characters == 0:
                 print(
@@ -216,17 +236,18 @@ async def get_channel_history(GuildName, ChannelName, characters):
                 return ""
             elif len(contents) > characters:
                 contents = contents[-characters:]
-            trimmed_contents = contents.strip()
-            print(
-                "Trimmed channel_history characters: ",len(trimmed_contents),
-                " | Trimmed channel_history lines: ",trimmed_contents.count("\n"),
-            )
-            return trimmed_contents
+                trimmed_contents = contents.strip()
+                print(
+                    f"Trimmed channel_history characters: {len(trimmed_contents)}",
+                    f" | Trimmed channel_history lines: {total_lines}"
+                )
+                return trimmed_contents
+            return contents.strip()
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"File {file_path} not found. Where did you lose it?")
+        write_to_log(LogFileLocation, LogFileName, f"File {file_path} not found. Where did you lose it?")
         return ""
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,f"An unexpected error occurred while accessing {file_path}: {e}")
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred while accessing {file_path}: {str(e)}")
         return ""
 
 async def get_user_history(user, characters):
@@ -235,10 +256,11 @@ async def get_user_history(user, characters):
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             contents = file.read()
-            print("Accessed:", file_path)
+            total_lines = contents.count('\n')
+            print(f"Accessed: {file_path}")
             print(
-                "Total user_history characters: ",len(contents),
-                " | Total user_history lines: ",contents.count("\n"),
+                f"Total user_history characters: {len(contents)}",
+                f" | Total user_history lines: {total_lines}"
             )
             if characters == 0:
                 print(
@@ -251,19 +273,17 @@ async def get_user_history(user, characters):
                     contents = contents[-characters:]
                 trimmed_contents = contents.strip()
                 print(
-                    "Trimmed user_history characters: ",len(trimmed_contents),
-                    " | Trimmed user_history lines: ",trimmed_contents.count("\n"),
+                    f"Trimmed user_history characters: {len(trimmed_contents)}",
+                    f" | Trimmed user_history lines: {total_lines}"
                 )
                 return trimmed_contents
             else:
-                return contents
+                return contents.strip()
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"File {file_path} not found. Where did you lose it?")
+        write_to_log(LogFileLocation, LogFileName, f"File {file_path} not found. Where did you lose it?")
         return ""
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,
-            f"An unexpected error occurred while accessing {file_path}: {e}"
-        )
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred while accessing {file_path}: {str(e)}")
         return ""
 
 async def add_to_user_history(content, user, file):
@@ -275,15 +295,13 @@ async def add_to_user_history(content, user, file):
     stamped_file_name = get_file_name(f"{ContextFolderLocation}\\users", f"{file.name}-stamped.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
-    if AddTimestamp and TimestampSeperateFile:
-        if content is not None:
+    if content is not None:
+        if AddTimestamp and TimestampSeperateFile:
             await append_text_file(stamped_file_name, stamped_message)
             await append_text_file(file_name, message)
-    elif AddTimestamp:
-        if content is not None:
+        elif AddTimestamp:
             await append_text_file(file_name, stamped_message)
-    else:
-        if content is not None:
+        else:
             await append_text_file(file_name, message)
 
 async def add_to_channel_history(guild, channel, user, content):
@@ -295,15 +313,13 @@ async def add_to_channel_history(guild, channel, user, content):
     stamped_file_name = get_file_name(f"{ContextFolderLocation}\\guilds\\{guild.name}", f"{channel.name}-stamped.txt")
     if LogNoTextUploads and not content:
         content = "<image or video>"
-    if AddTimestamp and TimestampSeperateFile:
-        if content is not None:
+    if content is not None:
+        if AddTimestamp and TimestampSeperateFile:
             await append_text_file(stamped_file_name, stamped_message)
             await append_text_file(file_name, message)
-    elif AddTimestamp:
-        if content is not None:
+        elif AddTimestamp:
             await append_text_file(file_name, stamped_message)
-    else:
-        if content is not None:
+        else:
             await append_text_file(file_name, message)
 
 async def get_txt_file(filename, characters):
@@ -314,13 +330,13 @@ async def get_txt_file(filename, characters):
             last_newline_index = contents.rfind("\n")
             if last_newline_index != -1:
                 contents = contents[last_newline_index + 1 :]
-            print("Accessed: ", filename)
-            return contents, len(contents)
+            print(f"Accessed: {filename}")
+            return contents
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"File {filename} not found. Where did you lose it?")
+        write_to_log(LogFileLocation, LogFileName, f"File {filename} not found. Where did you lose it?")
         return ""
     except Exception as e:
-        await write_to_log(LogFileLocation,LogFileName,f"An unexpected error occurred: {e}")
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred: {str(e)}")
         return ""
 
 async def prune_text_file(file, trim_to):
@@ -331,58 +347,50 @@ async def prune_text_file(file, trim_to):
         with open(file, "w", encoding="utf-8") as f:
             f.writelines(lines)
     except FileNotFoundError:
-        await write_to_log(LogFileLocation,LogFileName,f"Could not prune file {file} because it doesn't exist.")
+        write_to_log(LogFileLocation, LogFileName, f"Could not prune file {file} because it doesn't exist.")
+    except PermissionError:
+        write_to_log(LogFileLocation, LogFileName, f"Could not prune file {file} due to lack of permissions.")
+    except Exception as e:
+        write_to_log(LogFileLocation, LogFileName, f"An unexpected error occurred while pruning {file}: {str(e)}")
 
 async def append_text_file(file, text):
     # Append text to a file
-    directory = os.path.dirname(file)
-    absolute_directory = os.path.abspath(directory)
-    if not os.path.exists(absolute_directory):
-        os.makedirs(absolute_directory)
-    with open(file, "a+", encoding="utf-8") as context:
-        context.write(text)
+    file_path = Path(file)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(file_path, "a+", encoding="utf-8") as context:
+            context.write(text)
+    except Exception as e:
+        print(f"Failed to write to file {file_path}: {e}")
+
 
 def clean_user_message(client, user_input):
     # Clean user input to the bot
+    global bot_tags_pattern
     bot_tags = [f"@{client.user.name}#{client.user.discriminator}".lower(), f"@{client.user.name}".lower()]
-    pattern = re.compile("|".join(map(re.escape, bot_tags)), re.IGNORECASE)
-    return pattern.sub("", user_input).strip()
+    bot_tags_pattern = re.compile("|".join(map(re.escape, bot_tags)), re.IGNORECASE)
+    return bot_tags_pattern.sub("", user_input).strip()
 
-async def clean_llm_reply(message, user, bot):
-    if ResponseDebug:
-        print(f"Attemping to clean message for {user.name}")
-    # Clean generated reply
-    bot_lower, user_name_lower = bot.lower(), user.name.lower()
-    pattern = re.compile(
-        re.escape(bot_lower) + r":|" + re.escape(user_name_lower) + r":|You:",
-        re.IGNORECASE,
-    )
-    cleaned_message = pattern.sub("", message)
+async def clean_llm_reply(MessageContent, user, bot):
+    logging.info(f"Starting to clean message for {user.name}")
+    
+    bot_name_lower = bot.name.lower()
+
+    # remove the user's name from the message, including all variations of the name like capitalization and nicknames
+    MessageContent = re.sub(rf"\b{user.name}\b:", "", MessageContent, flags=re.IGNORECASE)
+
     if not AllowBotToMention:
-        cleaned_message = re.sub(r"<@", "<", cleaned_message)
-    elif ResolveMentionsToUserNames:
-        ids = re.findall(r'\b\d{18}\b', message.content)
-        for id in ids:
-            if message.guild is None:
-                user = await bot.fetch_user(id)
-            else:
-                user = message.guild.get_member(int(id))
-            if user is not None:
-                if MessageDebug:
-                    print(f"Resolved {id} to {user.name}")
-                cleaned_message = cleaned_message.replace(f"<!@{id}>", user.name)
-                cleaned_message = cleaned_message.replace(f"<@{id}>", user.name)
-                cleaned_message = cleaned_message.replace(f"<{id}>", user.name)
-                cleaned_message = cleaned_message.replace(f"{id}", user.name)
-    cleaned_message = re.sub(r"\n{2,}", "\n", cleaned_message)  # Replace consecutive line breaks with a single line break
-    if ResponseDebug:
-        print("Message was successfully cleaned.")
-    return cleaned_message.strip()
+        MessageContent = MessageContent.replace("<@", "<")
+        logging.info(f"Replaced '<@' with '<': {MessageContent}")
+
+    MessageContent = re.compile(r"\n{2,}").sub("\n", MessageContent)  # Replace consecutive line breaks with a single line break
+
+    logging.info("Finished cleaning message.")
+    return MessageContent.strip()
 
 def get_character(character_card):
     # Get current bot character in prompt-friendly format
-    # character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}Here is how you speak: \n{', '.join(character_card['examples'])}\n"
-    character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}\n"
+    character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}Here is how you speak: \n{', '.join(character_card['examples'])}\n"
     return character
 
 async def get_character_card(name):
@@ -402,10 +410,10 @@ def get_file_list(directory):
     return files
 
 # Script to add an ratelimit reaction emoji then remove it when the ratelimit is over
-async def RateLimitNotice(message):
+async def RateLimitNotice(message,client):
     await message.add_reaction(RateLimitedEmoji)
     await asyncio.sleep(UserRateLimitSeconds)
-    await message.remove_reaction(RateLimitedEmoji, message.guild.me)
+    await message.remove_reaction(RateLimitedEmoji, client.user)
 
 def image_from_string(image_string):
     # Create an image from a base64-encoded string
