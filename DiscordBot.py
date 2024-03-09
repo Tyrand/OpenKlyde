@@ -338,7 +338,7 @@ async def bot_answer(message):
         WebResults = "" if WebResults is None else WebResults
         DDGSearchResultsString = "" if DDGSearchResultsString is None else DDGSearchResultsString
         image_request = functions.check_for_image_request(user_input)
-        # If WebResults has at least 1 http link in it, then we have a web result, react with the 🌐 emoji to indicate a websearch was done
+        # If WebResults has at least 1 http link in it, then we have a web result, react with the WebSearchEmoji to indicate a websearch was done
         if WebResults and "http" in WebResults:
             await message.add_reaction(WebSearchEmoji)
         if GenerateImageOnly and image_request:
@@ -567,8 +567,6 @@ async def send_api_request(session, url, headers, data):
             print(f"An error occurred while parsing the response: {e}")
             return None
 
-RESPONSE_TEXT_LENGTH = 16
-
 async def is_valid_response(content, response_text):
     if ResponseDebug:
         print("Checking if response is valid")
@@ -588,7 +586,7 @@ async def is_valid_response(content, response_text):
     if (
         not stripped_response
         or "[chat log" in stripped_response.lower()
-        or any(re.match(pattern, stripped_response[:RESPONSE_TEXT_LENGTH], re.IGNORECASE) for pattern in patterns)
+        or any(re.match(pattern, stripped_response[:16], re.IGNORECASE) for pattern in patterns)
     ):
         return False
 
@@ -790,6 +788,8 @@ character_card = None
 async def on_ready():
     global BotReady, text_api, image_api, character_card
     BotReady = True
+    print(f"Discord Bot is up and running on the bot: {client.user.name}#{client.user.discriminator} ({client.user.id})")
+
     text_api = await functions.set_api(TextAPIConfig)
     text_api["parameters"]["max_length"] = ResponseMaxLength
     image_api = await functions.set_api("image-default.json")
@@ -1102,24 +1102,4 @@ async def on_message(message):
     # Bot will now either do or not do something!
     await bot_behavior(message)
 
-interrupt_count = 0
-restart_attempts = 0
-max_restart_attempts = 5
-
-try:
-    client.run(discord_api_key)
-except KeyboardInterrupt:
-    interrupt_count += 1
-    print("KeyboardInterrupt detected, do it again to exit.")
-    if interrupt_count >= 2:
-        raise
-except Exception as e:  # Catch general exceptions
-    client.close()
-    asyncio.sleep(10)  # Add a 10 second delay
-    print(f"An error occurred: {e}")
-    restart_attempts += 1
-    if restart_attempts <= max_restart_attempts:
-        print("Bot restarted successfully.")
-        asyncio.create_task(client.start(discord_api_key))
-    else:
-        print("Max restart attempts reached. Exiting.")
+client.run(discord_api_key)

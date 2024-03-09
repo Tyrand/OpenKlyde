@@ -84,13 +84,13 @@ def check_for_image_request(user_message):
 
 async def create_text_prompt(user_input, user, character, bot, memory, history, WebResults, reply, text_api):
     # Create a text prompt for text generation
-    prompt = f"{character}{memory}{history}{WebResults}{reply}{user.name}: {user_input}\n{bot}: Sure, "
+    prompt = f"{character}{memory}{history}{WebResults}{reply}{user.name}: {user_input}\n{bot}: "
     stop_sequence_key = "stop" if text_api["name"] == "openai" else "stop_sequence"
-    stop_sequence = ["you:", f"{user.name}:", f"{bot}:", f"@{bot}"]
+    stop_sequence = ["You:", f"\n{user.name}:", f"\n{bot}:", f"\n@{bot}"]
 
     update_dict = {
         "prompt": prompt,
-        stop_sequence_key: [seq.lower() for seq in stop_sequence]
+        stop_sequence_key: stop_sequence
     }
 
     data = text_api["parameters"].copy()
@@ -375,6 +375,10 @@ async def clean_llm_reply(MessageContent, user, bot):
     logging.info(f"Starting to clean message for {user.name}")
     
     bot_name_lower = bot.name.lower()
+    
+    # check the last line of the message, if it contains the bot's name - remove the whole line
+    if bot_name_lower in MessageContent.lower().split("\n")[-1]:
+        MessageContent = "\n".join(MessageContent.split("\n")[:-1])
 
     # remove the user's name from the message, including all variations of the name like capitalization and nicknames
     MessageContent = re.sub(rf"\b{user.name}\b:", "", MessageContent, flags=re.IGNORECASE)
