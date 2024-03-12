@@ -105,6 +105,13 @@ async def bot_behavior(message):
                 print(condition_message)
             return False
 
+    # Check if message starts with the AdminCommandTrigger
+    if message.content.startswith(AdminCommandTrigger):
+        if MessageDebug:
+            print("Will Respond: Message starts with AdminCommandTrigger")
+        await bot_command(message)
+        return
+    
     # Authorized users can bypass the channel/guild/DM restrictions but must mention the bot to do so
     if (message.author.id in DiscordAccounts or message.author.name in DiscordAccounts) and client.user.mentioned_in(message):
         if MessageDebug:
@@ -112,6 +119,7 @@ async def bot_behavior(message):
         await bot_answer(message)
         return True
 
+    # Check if the bot is in direct message mode
     if message.guild is None:
         if AllowDirectMessages:
             await bot_answer(message)
@@ -145,6 +153,30 @@ async def bot_behavior(message):
 
     await bot_answer(message)
     return True
+
+async def bot_command(message):
+    if message.content.startswith(AdminCommandTrigger + "mimic"):
+        command_args = message.content.split(" ")
+        if len(command_args) != 3:
+            await message.channel.send("Invalid command format. Please provide the channel id and message id.")
+            return
+        channel_id = int(command_args[1])
+        message_id = int(command_args[2])
+        try:
+            channel = client.get_channel(channel_id)
+            if channel is None:
+                await message.channel.send("Invalid channel id.")
+                return
+            message_to_mimic = await channel.fetch_message(message_id)
+            if message_to_mimic is None:
+                await message.channel.send("Invalid message id.")
+                return
+
+            # Create a new message with the content of the fetched message but the channel of the original message
+            new_message = discord.Message(state=client._connection, channel=message.channel, data=message_to_mimic._data)
+            await bot_answer(new_message)
+        except discord.NotFound:
+            await message.channel.send("Message not found")
 
 async def bot_answer(message):
     """
@@ -351,7 +383,7 @@ async def bot_answer(message):
             History = ""
             reply = ""
         prompt = await functions.create_text_prompt(
-            f"\n{user_input}",
+            user_input,
             user,
             character,
             character_card["name"],
@@ -476,10 +508,14 @@ async def resolve_users(FullMessage):
 async def get_mentioned_data(message, data_fetcher, data_amount):
     mentioned_data = []
     for user in message.mentions:
+        if user == client.user:
+            continue
         user_data = await data_fetcher(user, data_amount)
         mentioned_data.append(user_data)
     ids = re.findall(r'\b\d{18}\b', message.content)
     for id in ids:
+        if id == str(client.user.id):
+            continue
         if message.guild is None:
             logging.warning("Cannot fetch members in a DM")
             continue
@@ -503,31 +539,6 @@ async def get_mentioned_history(message):
 
 async def get_mentioned_memory(message):
     return await get_mentioned_data(message, functions.get_user_memory, UserMemoryAmount)
-        
-
-async def handle_llm_response(content, response):
-    try:
-        if ResponseDebug:
-            logging.debug("Received response from LLM model. Length: %s", len(response))
-        llm_response = response
-        extracted_data = extract_data_from_response(llm_response)
-        llm_message = await functions.clean_llm_reply(
-            extracted_data, content['user'], client.user
-        )
-        queue_item = {"response": llm_message, "content": content}
-
-        if content["image"]:
-            queue_to_process_image.put_nowait(queue_item)
-        else:
-            queue_to_send_message.put_nowait(queue_item)
-    except json.JSONDecodeError:
-        functions.write_to_log(LogFileLocation,LogFileName,
-            "Invalid JSON response from LLM model: " + str(response)
-        )
-    except Exception as e:
-        functions.write_to_log(LogFileLocation,LogFileName,
-            "Unexpected error: " + str(e)
-        )
 
 def extract_data_from_response(llm_response):
     """
@@ -572,13 +583,14 @@ async def is_valid_response(content, response_text):
         print("Checking if response is valid")
 
     patterns = [
-        r'\n' + re.escape(str(character_card['name'])) + r':$',
-        r'\n' + re.escape(str(content['user'].name)) + r':$',
-        r'\n' + re.escape(str(content['bot'].name)) + r':$',
-        r'\n' + re.escape(str(content['user'].display_name)) + r':$',
-        r'\n' + re.escape(str(content['bot'].display_name)) + r':$',
-        r'\n@' + re.escape(str(content['user'].id)) + r'$',
-        r'\n@' + re.escape(str(content['bot'].id)) + r'$',
+        r'' + re.escape(str(character_card['name'])) + r':$',
+        r'\n' + re.escape(str(character_card['name'])) + r' $',
+        r'' + re.escape(str(content['user'].name)) + r':$',
+        r'' + re.escape(str(content['bot'].name)) + r':$',
+        r'' + re.escape(str(content['user'].display_name)) + r':$',
+        r'' + re.escape(str(content['bot'].display_name)) + r':$',
+        r'@' + re.escape(str(content['user'].id)) + r'$',
+        r'@' + re.escape(str(content['bot'].id)) + r'$',
     ]
 
     stripped_response = response_text.strip()
@@ -586,7 +598,9 @@ async def is_valid_response(content, response_text):
     if (
         not stripped_response
         or "[chat log" in stripped_response.lower()
+        or "[Results of a quick" in stripped_response.lower()
         or any(re.match(pattern, stripped_response[:16], re.IGNORECASE) for pattern in patterns)
+        or any(re.match(pattern, stripped_response.splitlines()[-1], re.IGNORECASE) for pattern in patterns)
     ):
         return False
 
@@ -657,17 +671,25 @@ async def send_to_model_queue():
                         f"Received API response from LLM model: {response_data}"
                     )
                     response_text = response_data["results"][0]["text"]
+                    extracted_data = extract_data_from_response(response_data)
+                    llm_message = await functions.clean_llm_reply(
+                        extracted_data, content['user'], client.user
+                    )
                     # If the response is short and ends with a colon, it's probably triggered it's stop_sequence instantly
-                    if len(response_text) < 20 and (response_text[-1] == ":" or response_text[-2] == ":"):
-                        retry_count += 0.1 # Only increase the retry count by 0.1 because hasn't been a full attempt and costs very little to keep trying
+                    if len(response_text) < 1 and (response_text[-1] == ":" or response_text[-2] == ":"):
+                        retry_count += 0.25 # Only increase the retry count by 0.1 because hasn't been a full attempt and costs very little to keep trying
                         continue
-                    elif await is_valid_response(content, response_text):
-                        await handle_llm_response(content, response_data)
+                    elif await is_valid_response(content, llm_message):
+                        queue_item = {"response": llm_message, "content": content}
+                        if content["image"]:
+                            queue_to_process_image.put_nowait(queue_item)
+                        else:
+                            queue_to_send_message.put_nowait(queue_item)
                         queue_to_process_message.task_done()
                         break
                     # If the response fails the if statement, the bot will generate a new response, repeat until it's caught in the if statement
                     await asyncio.sleep(
-                        1
+                        0
                     )  # Add a delay to avoid excessive API requests (in seconds)
                 except Exception as e:
                     print(f"Error occurred: {e}")
@@ -741,6 +763,8 @@ async def send_large_message(original_message, reply_content, file=None):
     chunks.append(reply_content)
     for chunk in chunks:
         try:
+            if not chunk:
+                chunk = "Failed to generate a response correctly after multiple attempts. Please try again or use a different prompt."
             if file:
                 await original_message.reply(chunk, file=file)
             else:
@@ -789,6 +813,13 @@ async def on_ready():
     global BotReady, text_api, image_api, character_card
     BotReady = True
     print(f"Discord Bot is up and running on the bot: {client.user.name}#{client.user.discriminator} ({client.user.id})")
+    # Join the voice channel when the bot is online
+    #voice_channel_id = 238061182768906240  # Replace with the actual voice channel ID
+    #voice_channel = client.get_channel(voice_channel_id)
+    #if voice_channel:
+    #    await voice_channel.connect()
+    #else:
+    #    print(f"Voice channel with ID {voice_channel_id} not found.")
 
     text_api = await functions.set_api(TextAPIConfig)
     text_api["parameters"]["max_length"] = ResponseMaxLength
@@ -1000,11 +1031,11 @@ async def view_configuration(interaction):
     await interaction.response.send_message(
         "The bot's current configuration is as follows:\n" + 
         "Response Max Length: " + str(ResponseMaxLength) + " tokens (approx "+str(ResponseMaxLength*3)+" ~ "+str(ResponseMaxLength*4)+" characters)"  + "\n" +
-        "Channel History (characters): " + str(ChannelHistoryAmount) + "\n" +
-        "User History (characters): " + str(UserHistoryAmount) + "\n" +
-        "Guild Memory (characters): " + str(GuildMemoryAmount) + "\n" +
-        "Channel Memory (characters): " + str(ChannelMemoryAmount) + "\n" +
-        "User Memory (characters): " + str(UserMemoryAmount) + "\n" +
+        "Channel History (characters): " + str(ChannelHistoryAmount)if(ChannelHistoryToggle) else "0" + "\n" +
+        "User History (characters): " + str(UserHistoryAmount) if(UserHistoryToggle) else "0" + "\n" +
+        "Guild Memory (characters): " + str(GuildMemoryAmount) if(GuildMemoryToggle) else "0" + "\n" +
+        "Channel Memory (characters): " + str(ChannelMemoryAmount) if(ChannelMemoryToggle) else "0" + "\n" +
+        "User Memory (characters): " + str(UserMemoryAmount) if(UserMemoryToggle) else "0" + "\n" +
         "Allow Direct Messages: " + str(AllowDirectMessages) + "\n" +
         "UserRateLimitSeconds: " + str(UserRateLimitSeconds) + "\n" +
         "Reply to Bots: " + str(ReplyToBots) + "\n" +

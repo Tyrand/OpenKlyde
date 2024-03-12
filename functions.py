@@ -375,10 +375,12 @@ async def clean_llm_reply(MessageContent, user, bot):
     logging.info(f"Starting to clean message for {user.name}")
     
     bot_name_lower = bot.name.lower()
-    
-    # check the last line of the message, if it contains the bot's name - remove the whole line
-    if bot_name_lower in MessageContent.lower().split("\n")[-1]:
-        MessageContent = "\n".join(MessageContent.split("\n")[:-1])
+
+    # check the last line of the message, if it contains the bot's name (or the user's name), remove it
+    last_line = MessageContent.split("\n")[-1]
+    if bot_name_lower in last_line.lower() or user.name.lower() in last_line.lower():
+        MessageContent = MessageContent.replace(last_line, "")
+
 
     # remove the user's name from the message, including all variations of the name like capitalization and nicknames
     MessageContent = re.sub(rf"\b{user.name}\b:", "", MessageContent, flags=re.IGNORECASE)
@@ -394,7 +396,8 @@ async def clean_llm_reply(MessageContent, user, bot):
 
 def get_character(character_card):
     # Get current bot character in prompt-friendly format
-    character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}Here is how you speak: \n{', '.join(character_card['examples'])}\n"
+    character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}\n"
+    #character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}Here is how you speak: \n{', '.join(character_card['examples'])}\n"
     return character
 
 async def get_character_card(name):
