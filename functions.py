@@ -396,7 +396,7 @@ async def clean_llm_reply(MessageContent, user, bot):
 
 def get_character(character_card):
     # Get current bot character in prompt-friendly format
-    character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}\n"
+    character = f"Your name is {character_card['name']}. {character_card['persona']} {character_card['instructions']}\n"
     #character = f"Your name is {character_card['name']}. You are {character_card['persona']}. {character_card['instructions']}Here is how you speak: \n{', '.join(character_card['examples'])}\n"
     return character
 

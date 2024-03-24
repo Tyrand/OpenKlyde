@@ -218,7 +218,6 @@ async def bot_answer(message):
     DDGSearchResultsString = ""
     WebResults = ""
     #WebResults = f"\nTyrandBot: current UTC Unix time is '{int(time.time())}' which in date and time format is '{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'\n"
-    WebResults = WebResults + "\nTyrandBot: [Results of a quick Internet Search]"
     # Clean the user's message to make it easy to read
     user_input = functions.clean_user_message(client,message.content)
     # Log the received message
@@ -364,7 +363,9 @@ async def bot_answer(message):
                     except Exception as e:
                         print(f"An error occurred while extracting from Wikipedia: {e}")
             pass
-        WebResults = WebResults + "\nTyrandBot: [End of Internet Search]\n"
+        if WebResults:
+            WebResults =  f"\n{character_card['name']}: [Results of a quick Internet Search]" + WebResults
+            WebResults = WebResults + "[End of Internet Search]\n"
         Memory = "" if Memory is None else Memory
         History = "" if History is None else History
         WebResults = "" if WebResults is None else WebResults
