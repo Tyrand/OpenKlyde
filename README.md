@@ -15,11 +15,6 @@ As of now this bot is only a chat bot, but it can also generate images with Auto
 Download Koboldcpp here:
 [Koboldcpp](https://github.com/LostRuins/koboldcpp)
 
-If you want to generate images, you'll also need Automatic1111 Stable Diffusion runing with --listen and --api optons enabled on launch.
-Download Automatic1111 here:
-[Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
-
-
 ## Instructions:
 
 To run this bot:
@@ -32,4 +27,3 @@ To run this bot:
 5. Run the bot with `python DiscordBot.py`
 
 Cheers!
-
